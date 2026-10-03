@@ -1,7 +1,7 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
-const state = { config: null, health: null, files: { caption: [], analyze: [], thumbnail: [], artcover: [] }, busy: false };
+const state = { config: null, health: null, files: { caption: [], score: [], analyze: [], thumbnail: [], artcover: [] }, busy: false };
 const FRAMES_PER_VIDEO = 6;
 const MAX_EDGE = 1280;
 
@@ -250,6 +250,15 @@ const builders = {
     useLiveTrends: checked(p, 'useLiveTrends'),
     webSearch: checked(p, 'webSearch'),
   }),
+  score: (p) => ({
+    images: payloadImages('score'),
+    mediaKind: val(p, 'mediaKind'),
+    context: val(p, 'context'),
+    instructions: val(p, 'instructions'),
+    platforms: chipValues(p, 'platforms'),
+    useLiveTrends: checked(p, 'useLiveTrends'),
+    webSearch: checked(p, 'webSearch'),
+  }),
   analyze: (p) => ({
     images: payloadImages('analyze'),
     context: val(p, 'context'),
@@ -334,7 +343,46 @@ function renderMeta(meta, result) {
   return el('div', { class: 'meta' }, el('span', {}, bits.join(' · ')), el('button', { class: 'copy', type: 'button', onclick: download }, 'Download JSON'));
 }
 
+const LABELS = { hook: 'Hook', visualQuality: 'Visual quality', originality: 'Originality', emotionalImpact: 'Emotional impact', clarity: 'Clarity', trendAlignment: 'Trend alignment', shareability: 'Shareability' };
+const level = (n) => (n == null ? '' : n >= 75 ? 'high' : n >= 50 ? 'mid' : 'low');
+const ring = (value, label, sub) =>
+  el('div', { class: `ring ${level(value)}`, style: `--p:${value ?? 0}` }, el('div', { class: 'ring-inner' }, el('b', {}, value == null ? '-' : `${value}%`), el('span', {}, label), sub ? el('small', {}, sub) : ''));
+const pctBar = (label, value, reason) =>
+  el('div', { class: 'pct-row' },
+    el('div', { class: 'score' }, el('span', {}, label), el('div', { class: `bar ${level(value)}` }, el('i', { style: `width:${value ?? 0}%` })), el('b', {}, value == null ? '-' : `${value}%`)),
+    reason ? el('p', { class: 'muted reason' }, reason) : '');
+
 const renderers = {
+  score(r) {
+    return el('div', {},
+      el('div', { class: 'card rings' },
+        ring(r.overall, 'Overall', `Grade ${r.grade}`),
+        ring(r.trendingPotential, 'Trending potential'),
+        ring(r.strength, 'Strength'),
+        r.projectedScore != null && r.overall != null && r.projectedScore > r.overall ? ring(r.projectedScore, 'After fixes', `+${r.projectedScore - r.overall}%`) : '',
+      ),
+      r.verdict ? section('Verdict', el('p', {}, r.verdict)) : '',
+      section('Score breakdown', ...r.criteria.map((c) => pctBar(LABELS[c.key] ?? c.key, c.score, c.reason))),
+      section('Trending potential by platform', ...r.platformPotential.map((p) => pctBar(p.label, p.potential, p.reason))),
+      el('div', { class: 'grid2' },
+        section('What makes it strong', ...r.strengths.map((s) => el('div', { class: `improve ${s.impact === 'high' ? 'low' : s.impact === 'medium' ? 'medium' : ''}` }, el('span', { class: 'pill' }, `${s.impact} impact`), el('span', {}, s.point)))),
+        section('What holds it back', list(r.weaknesses)),
+      ),
+      section('How to improve it',
+        ...r.improvements.map((i) =>
+          el('div', { class: 'improve high' },
+            el('span', { class: 'gain' }, `+${i.estimatedGain}%`),
+            i.criterion ? el('span', { class: 'pill' }, LABELS[i.criterion] ?? i.criterion) : '',
+            el('b', {}, i.action),
+            el('p', { class: 'muted' }, i.why),
+          ),
+        ),
+        el('p', { class: 'muted small' }, 'Gains are estimates per criterion, not guarantees.'),
+      ),
+      r.trendMatches.length ? section('Trends it can ride', el('div', { class: 'trend-insights' }, r.trendMatches.map((t) => el('div', {}, el('b', {}, t.trend), el('span', { class: 'pill' }, t.source), el('p', { class: 'muted' }, t.howToUse))))) : '',
+    );
+  },
+
   caption(r) {
     const ca = r.contentAnalysis;
     const platforms = Object.entries(r.platforms).map(([key, p]) =>

@@ -1,10 +1,11 @@
 # Content AI Studio
 
-A web app with five AI assistants for creators:
+A web app with six AI assistants for creators:
 
 | Assistant | Input | Output |
 |---|---|---|
 | **Caption & Hashtag AI** | Reels, videos, posts, images + your instructions | Separate title, caption, hashtags, keywords, hook, CTA and posting tip for YouTube, Instagram, Threads, X, TikTok, Facebook, already trimmed to each platform's limits |
+| **Trend Score AI** | Your material + target platforms | Percentage ratings: overall (with grade), trending potential, strength, 7 criteria and every platform, each with a reason; what makes it strong; improvements ranked by estimated % gain; projected score after fixes |
 | **Content Analytics AI** | Your content + optional numbers (views, likes, saves, watch time…) | 0–100 scores, computed engagement rates, strengths/weaknesses, prioritized fix list, better hooks, repurpose plan |
 | **Trend Idea AI** | One short prompt | Ranked ideas with hook, shot list, why it can trend, hashtags, 2-week plan |
 | **Thumbnail Prompt AI** | Video/photos + title + style | Image-AI prompts for 16:9, 9:16, 1:1, 4:5, 3:4, 4:3, 2:3, 21:9, each re-composed for its shape and formatted for Midjourney, FLUX, SDXL, DALL·E, Ideogram, Leonardo or Firefly |
@@ -18,7 +19,7 @@ Every assistant has a **"Your instructions"** box. Write how you want the result
 npm install
 cp .env.example .env      # then put your key in .env
 npm start                 # http://localhost:3000
-npm test                  # 31 tests, no network or API key needed
+npm test                  # 34 tests, no network or API key needed
 ```
 
 Requires Node 20+.
@@ -52,7 +53,7 @@ curl -s localhost:3000/api/assist/ideas -H 'Content-Type: application/json' -d '
   "profile": {"tone": "funny, fast", "language": "English"}
 }'
 ```
-Endpoints: `POST /api/assist/{caption|analyze|ideas|thumbnail|artcover}`, `GET /api/trends?geo=US`, `GET /api/health`.
+Endpoints: `POST /api/assist/{caption|score|analyze|ideas|thumbnail|artcover}`, `GET /api/trends?geo=US`, `GET /api/health`.
 
 ## Deploy (make it live)
 

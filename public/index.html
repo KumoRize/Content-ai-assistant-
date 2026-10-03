@@ -21,6 +21,7 @@
   <div class="layout">
     <nav class="tabs" id="tabs">
       <button data-tab="caption" class="active"><b>Caption &amp; Hashtag AI</b><small>Descriptions, captions, tags per platform</small></button>
+      <button data-tab="score"><b>Trend Score AI</b><small>Rate my material in %</small></button>
       <button data-tab="analyze"><b>Content Analytics AI</b><small>Score &amp; fix your content</small></button>
       <button data-tab="ideas"><b>Trend Idea AI</b><small>Viral ideas from one prompt</small></button>
       <button data-tab="thumbnail"><b>Thumbnail Prompt AI</b><small>Prompts for every ratio</small></button>
@@ -75,6 +76,37 @@
         </div>
         <button class="go" data-run="caption">Generate captions &amp; hashtags</button>
         <div class="result" id="result-caption"></div>
+      </section>
+
+      <!-- SCORE -->
+      <section class="panel" id="panel-score">
+        <h1>Trend Score AI</h1>
+        <p class="lead">Get a percentage rating for your material: overall score, trending potential, strength, a score per platform, and exactly how to raise each one.</p>
+        <div class="dropzone" data-for="score" tabindex="0">
+          <input type="file" accept="image/*,video/*" multiple hidden />
+          <p><b>Drop the material to rate</b> or click to choose.</p>
+        </div>
+        <div class="previews" data-previews="score"></div>
+        <div class="grid2">
+          <label>Material type
+            <select name="mediaKind">
+              <option value="reel">Reel / Short</option><option value="long video">Long video</option><option value="image post">Image post</option>
+              <option value="carousel">Carousel</option><option value="thumbnail">Thumbnail</option><option value="cover art">Cover art</option><option value="other">Other</option>
+            </select>
+          </label>
+          <label>Description / caption / transcript (optional)<input name="context" placeholder="What happens, what you say, planned caption" /></label>
+        </div>
+        <label>Rate it for</label>
+        <div class="chips" data-chips="platforms"></div>
+        <label>Anything specific? (optional)
+          <textarea name="instructions" rows="3" placeholder="Example: Be harsh. Is the first frame strong enough? Would this trend in the UK fitness niche?"></textarea>
+        </label>
+        <div class="options">
+          <label class="check"><input type="checkbox" name="useLiveTrends" checked /> Use live trend data</label>
+          <label class="check ws"><input type="checkbox" name="webSearch" /> Live web search (Claude only)</label>
+        </div>
+        <button class="go" data-run="score">Rate my material</button>
+        <div class="result" id="result-score"></div>
       </section>
 
       <!-- ANALYZE -->
