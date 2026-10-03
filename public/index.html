@@ -10,7 +10,12 @@
 <body>
   <header class="topbar">
     <div class="brand"><span class="logo">✦</span> Content AI Studio</div>
-    <div id="status" class="status">Checking AI…</div>
+    <div class="top-right">
+      <label class="engine">AI engine
+        <select id="engine" aria-label="AI engine"><option value="auto">Auto</option></select>
+      </label>
+      <div id="status" class="status">Checking AI…</div>
+    </div>
   </header>
 
   <div id="setupBanner" class="banner hidden">
@@ -22,6 +27,7 @@
     <nav class="tabs" id="tabs">
       <button data-tab="caption" class="active"><b>Caption &amp; Hashtag AI</b><small>Descriptions, captions, tags per platform</small></button>
       <button data-tab="score"><b>Trend Score AI</b><small>Rate my material in %</small></button>
+      <button data-tab="music"><b>Music Trend AI</b><small>Rate your track, peak &amp; trend timeline</small></button>
       <button data-tab="analyze"><b>Content Analytics AI</b><small>Score &amp; fix your content</small></button>
       <button data-tab="ideas"><b>Trend Idea AI</b><small>Viral ideas from one prompt</small></button>
       <button data-tab="thumbnail"><b>Thumbnail Prompt AI</b><small>Prompts for every ratio</small></button>
@@ -107,6 +113,50 @@
         </div>
         <button class="go" data-run="score">Rate my material</button>
         <div class="result" id="result-score"></div>
+      </section>
+
+      <!-- MUSIC -->
+      <section class="panel" id="panel-music">
+        <h1>Music Trend AI</h1>
+        <p class="lead">Upload your track. Get percentage ratings, trending potential per platform, the track's peak moment, the best clips for TikTok/Reels, and a week-by-week trend timeline.</p>
+        <div class="dropzone" id="audioDrop" tabindex="0">
+          <input type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac" hidden />
+          <p><b>Drop your track (MP3, WAV, M4A, OGG, FLAC)</b> or click to choose. It is analyzed in your browser; only the measurements are sent.</p>
+        </div>
+        <div id="audioSummary" class="audio-summary hidden"></div>
+        <p class="muted small">Note: AI models can't listen to audio directly. The rating uses measured tempo, loudness, dynamics and energy over time, plus your lyrics and description, so fill those in for the most accurate result.</p>
+        <div class="grid2">
+          <label>Track title<input name="t_title" placeholder="Midnight Drive" /></label>
+          <label>Artist<input name="t_artist" placeholder="Your artist name" /></label>
+          <label>Genre<input name="t_genre" placeholder="Phonk, Afrobeats, Punjabi drill, lo-fi…" /></label>
+          <label>Mood<input name="t_mood" placeholder="Dark, nostalgic, high energy" /></label>
+          <label>Song language<input name="t_language" placeholder="English, Punjabi, Hindi…" /></label>
+          <label>Release date (optional)<input type="date" name="t_releaseDate" /></label>
+        </div>
+        <label>Sounds like / reference artists (optional)<input name="t_soundsLike" placeholder="e.g. Sidhu Moose Wala x Travis Scott, slowed 808s" /></label>
+        <label>Describe the sound (optional but helps a lot)
+          <textarea name="description" rows="2" placeholder="Female vocals, catchy whistled hook at 0:45, heavy 808 drop, ends abruptly"></textarea>
+        </label>
+        <label>Lyrics (optional)
+          <textarea name="lyrics" rows="5" placeholder="Paste lyrics, or use the button to transcribe them from the track"></textarea>
+        </label>
+        <button type="button" class="secondary" id="transcribeBtn">Transcribe lyrics from the track</button>
+        <span id="transcribeNote" class="muted small"></span>
+        <label>Cover art (optional, 1 image)</label>
+        <div class="dropzone small-drop" data-for="music" tabindex="0">
+          <input type="file" accept="image/*" hidden />
+          <p>Drop the cover image</p>
+        </div>
+        <div class="previews" data-previews="music"></div>
+        <label>Anything specific? (optional)
+          <textarea name="instructions" rows="2" placeholder="Example: Will this blow up on TikTok in India? Which part should I use for the teaser?"></textarea>
+        </label>
+        <div class="options">
+          <label class="check"><input type="checkbox" name="useLiveTrends" checked /> Use live trend data</label>
+          <label class="check ws"><input type="checkbox" name="webSearch" /> Live web search for trending sounds (Claude only)</label>
+        </div>
+        <button class="go" data-run="music">Rate my track</button>
+        <div class="result" id="result-music"></div>
       </section>
 
       <!-- ANALYZE -->

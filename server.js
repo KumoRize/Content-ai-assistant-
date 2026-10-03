@@ -1,5 +1,5 @@
 import { createApp } from './src/app.js';
-import { createProviderFromEnv } from './src/providers/index.js';
+import { createProvidersFromEnv } from './src/providers/index.js';
 
 try {
   process.loadEnvFile();
@@ -7,11 +7,12 @@ try {
   // No .env file: rely on real environment variables (e.g. on Render/Railway).
 }
 
-const provider = createProviderFromEnv();
-const app = createApp({ provider, rateLimitPerMin: Number(process.env.RATE_LIMIT_PER_MIN) || 20 });
+const { providers, preferred } = createProvidersFromEnv();
+const app = createApp({ providers, preferred, rateLimitPerMin: Number(process.env.RATE_LIMIT_PER_MIN) || 20 });
 const port = Number(process.env.PORT) || 3000;
 
 app.listen(port, () => {
   console.log(`Content AI Studio running at http://localhost:${port}`);
-  console.log(provider ? `AI provider: ${provider.name} (${provider.model})` : 'WARNING: no AI provider configured. Copy .env.example to .env and add a key.');
+  const active = Object.entries(providers).map(([k, p]) => `${k}: ${p.model}`);
+  console.log(active.length ? `AI engines: ${active.join(', ')} (preferred: ${preferred})` : 'WARNING: no AI provider configured. Set ANTHROPIC_API_KEY and/or OSS_API_KEY.');
 });

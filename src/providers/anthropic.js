@@ -59,7 +59,7 @@ export function createAnthropicProvider({ apiKey, model = 'claude-opus-5-5', eff
     }
   }
 
-  return { name: 'anthropic', model, supportsWebSearch: true, supportsVision: true, generate };
+  return { name: 'anthropic', label: 'Claude', model, supportsWebSearch: true, supportsVision: true, generate };
 }
 
 function mapError(err) {

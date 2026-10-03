@@ -15,5 +15,13 @@ services:
         value: claude-opus-5-5
       - key: ANTHROPIC_EFFORT
         value: high
+      - key: OSS_API_KEY
+        sync: false
+      - key: OSS_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: OSS_MODEL
+        value: meta-llama/llama-4-scout-17b-16e-instruct
+      - key: OSS_TRANSCRIBE_MODEL
+        value: whisper-large-v3-turbo
       - key: YOUTUBE_API_KEY
         sync: false

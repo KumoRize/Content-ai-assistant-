@@ -1,25 +1,33 @@
 import { createAnthropicProvider } from './anthropic.js';
 import { createOpenAICompatibleProvider } from './openaiCompatible.js';
 
-// Returns null when nothing is configured; the UI then shows setup instructions.
-export function createProviderFromEnv(env = process.env) {
-  const kind = (env.AI_PROVIDER || 'anthropic').toLowerCase();
-  if (kind === 'anthropic') {
-    if (!env.ANTHROPIC_API_KEY) return null;
-    return createAnthropicProvider({
+export const ENGINE_LABELS = { claude: 'Claude', oss: 'Open-source (free)' };
+
+// Builds every provider that has credentials. Both can be active at once:
+// the UI lets you pick one, and "Auto" falls back to the other on failure.
+export function createProvidersFromEnv(env = process.env) {
+  const providers = {};
+  if (env.ANTHROPIC_API_KEY) {
+    providers.claude = createAnthropicProvider({
       apiKey: env.ANTHROPIC_API_KEY,
       model: env.ANTHROPIC_MODEL || 'claude-opus-5-5',
       effort: env.ANTHROPIC_EFFORT || 'high',
     });
   }
-  if (kind === 'openai-compatible' || kind === 'oss') {
-    if (!env.OSS_BASE_URL || !env.OSS_MODEL) return null;
-    return createOpenAICompatibleProvider({
-      baseUrl: env.OSS_BASE_URL,
+  const ossBase = env.OSS_BASE_URL || (env.OSS_API_KEY ? 'https://api.groq.com/openai/v1' : '');
+  if (ossBase) {
+    providers.oss = createOpenAICompatibleProvider({
+      baseUrl: ossBase,
       apiKey: env.OSS_API_KEY,
-      model: env.OSS_MODEL,
+      model: env.OSS_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct',
+      transcribeModel: env.OSS_TRANSCRIBE_MODEL || 'whisper-large-v3-turbo',
       supportsVision: env.OSS_SUPPORTS_VISION !== 'false',
     });
   }
-  throw new Error(`Unknown AI_PROVIDER "${env.AI_PROVIDER}". Use "anthropic" or "openai-compatible".`);
+  const pref = (env.AI_PROVIDER || 'anthropic').toLowerCase();
+  if (!['anthropic', 'claude', 'openai-compatible', 'oss'].includes(pref)) {
+    throw new Error(`Unknown AI_PROVIDER "${env.AI_PROVIDER}". Use "anthropic" or "openai-compatible".`);
+  }
+  const preferred = ['openai-compatible', 'oss'].includes(pref) ? 'oss' : 'claude';
+  return { providers, preferred };
 }

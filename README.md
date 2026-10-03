@@ -1,11 +1,12 @@
 # Content AI Studio
 
-A web app with six AI assistants for creators:
+A web app with seven AI assistants for creators. Live at https://content-ai-studio.onrender.com
 
 | Assistant | Input | Output |
 |---|---|---|
 | **Caption & Hashtag AI** | Reels, videos, posts, images + your instructions | Separate title, caption, hashtags, keywords, hook, CTA and posting tip for YouTube, Instagram, Threads, X, TikTok, Facebook, already trimmed to each platform's limits |
 | **Trend Score AI** | Your material + target platforms | Percentage ratings: overall (with grade), trending potential, strength, 7 criteria and every platform, each with a reason; what makes it strong; improvements ranked by estimated % gain; projected score after fixes |
+| **Music Trend AI** | Your track (MP3/WAV/M4A/OGG/FLAC) + lyrics/details, optional cover | Percentage ratings (overall, trending potential, strength, 8 criteria, 6 platforms), the track's peak moment on an energy graph, best 15s/30s clips for TikTok/Reels, and a week-by-week trend timeline: time to peak, peak week, how long it stays trendable, release plan |
 | **Content Analytics AI** | Your content + optional numbers (views, likes, saves, watch time…) | 0–100 scores, computed engagement rates, strengths/weaknesses, prioritized fix list, better hooks, repurpose plan |
 | **Trend Idea AI** | One short prompt | Ranked ideas with hook, shot list, why it can trend, hashtags, 2-week plan |
 | **Thumbnail Prompt AI** | Video/photos + title + style | Image-AI prompts for 16:9, 9:16, 1:1, 4:5, 3:4, 4:3, 2:3, 21:9, each re-composed for its shape and formatted for Midjourney, FLUX, SDXL, DALL·E, Ideogram, Leonardo or Firefly |
@@ -19,17 +20,19 @@ Every assistant has a **"Your instructions"** box. Write how you want the result
 npm install
 cp .env.example .env      # then put your key in .env
 npm start                 # http://localhost:3000
-npm test                  # 34 tests, no network or API key needed
+npm test                  # 46 tests, no network or API key needed
 ```
 
 Requires Node 20+.
 
 ## Choosing the AI
 
-| `AI_PROVIDER` | What you need | Notes |
+| Engine | What you need | Notes |
 |---|---|---|
-| `anthropic` (default) | `ANTHROPIC_API_KEY` | Claude Opus 5.5 with vision, structured JSON output, and optional **live web search** for trending hashtags |
-| `openai-compatible` | `OSS_BASE_URL`, `OSS_MODEL`, (`OSS_API_KEY`) | Any open-source model behind an OpenAI-style API: Groq, OpenRouter, Together, or **Ollama/LM Studio locally**. Use a vision model for image/video input |
+| Claude | `ANTHROPIC_API_KEY` | Claude Opus 5.5 with vision, structured JSON output, and optional **live web search** for trending hashtags |
+| Open-source (free) | `OSS_API_KEY` (free Groq key) | Llama 4 Scout (vision) + Whisper lyrics transcription on Groq's free tier. Or point `OSS_BASE_URL`/`OSS_MODEL` at OpenRouter, Together, or **Ollama/LM Studio locally** |
+
+Configure one or both. The **AI engine** picker in the top bar chooses per request; **Auto** tries `AI_PROVIDER`'s engine first and switches to the other on rate limits, outages or an empty credit balance.
 
 ## Where the trend data comes from
 
@@ -53,7 +56,7 @@ curl -s localhost:3000/api/assist/ideas -H 'Content-Type: application/json' -d '
   "profile": {"tone": "funny, fast", "language": "English"}
 }'
 ```
-Endpoints: `POST /api/assist/{caption|score|analyze|ideas|thumbnail|artcover}`, `GET /api/trends?geo=US`, `GET /api/health`.
+Endpoints: `POST /api/transcribe`, `POST /api/assist/{caption|score|music|analyze|ideas|thumbnail|artcover}`, `GET /api/trends?geo=US`, `GET /api/health`.
 
 ## Deploy (make it live)
 
@@ -61,6 +64,7 @@ Endpoints: `POST /api/assist/{caption|score|analyze|ideas|thumbnail|artcover}`, 
 
 ## Assumptions & limits (read these)
 
+- **Music is measured, not heard.** Claude and Llama 4 don't accept audio files, so the browser measures the track (tempo, loudness, dynamics, energy over time, intro length, drop position, stereo) and the AI rates from those numbers plus lyrics and your description. The page shows a confidence level. Tempo can come out as half or double time. Trend timelines are predictions, not guarantees.
 - **Videos are analyzed visually**: the browser samples 6 evenly spaced frames per video. Audio and speech are not heard; paste a transcript or lyrics into the context field for those.
 - Videos must be playable in your browser (MP4/H.264 works in Chrome, Edge and Safari; WebM in Chrome/Firefox). Convert HEIC photos to JPG first.
 - **No tool can guarantee virality.** The assistants follow platform best practices and real trend signals. Results still depend on your content, timing and audience; use the A/B ideas to test.

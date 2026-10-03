@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import Anthropic from '@anthropic-ai/sdk';
 import { createAnthropicProvider } from '../src/providers/anthropic.js';
 import { createOpenAICompatibleProvider } from '../src/providers/openaiCompatible.js';
-import { createProviderFromEnv } from '../src/providers/index.js';
+import { createProvidersFromEnv } from '../src/providers/index.js';
 import { PNG } from './helpers.js';
 
 function fakeClient(responses) {
@@ -114,11 +114,37 @@ test('openai-compatible: text-only models, errors and truncation', async () => {
   await assert.rejects(p3.generate({ system: 's', text: 't' }), /cut off/);
 });
 
-test('createProviderFromEnv', () => {
-  assert.equal(createProviderFromEnv({}), null);
-  assert.equal(createProviderFromEnv({ ANTHROPIC_API_KEY: 'k' }).name, 'anthropic');
-  assert.equal(createProviderFromEnv({ ANTHROPIC_API_KEY: 'k' }).model, 'claude-opus-5-5');
-  assert.equal(createProviderFromEnv({ AI_PROVIDER: 'openai-compatible', OSS_BASE_URL: 'http://x/v1', OSS_MODEL: 'm' }).name, 'openai-compatible');
-  assert.equal(createProviderFromEnv({ AI_PROVIDER: 'openai-compatible' }), null);
-  assert.throws(() => createProviderFromEnv({ AI_PROVIDER: 'skynet' }), /Unknown AI_PROVIDER/);
+test('createProvidersFromEnv builds every configured engine', () => {
+  assert.deepEqual(createProvidersFromEnv({}).providers, {});
+  const both = createProvidersFromEnv({ ANTHROPIC_API_KEY: 'k', OSS_API_KEY: 'g' });
+  assert.deepEqual(Object.keys(both.providers), ['claude', 'oss']);
+  assert.equal(both.preferred, 'claude');
+  assert.equal(both.providers.claude.model, 'claude-opus-5-5');
+  assert.equal(both.providers.oss.model, 'meta-llama/llama-4-scout-17b-16e-instruct');
+  const oss = createProvidersFromEnv({ AI_PROVIDER: 'openai-compatible', OSS_BASE_URL: 'http://localhost:11434/v1', OSS_MODEL: 'qwen2.5vl' });
+  assert.deepEqual(Object.keys(oss.providers), ['oss']);
+  assert.equal(oss.preferred, 'oss');
+  assert.equal(oss.providers.oss.model, 'qwen2.5vl');
+  assert.throws(() => createProvidersFromEnv({ AI_PROVIDER: 'skynet' }), /Unknown AI_PROVIDER/);
+});
+
+test('openai-compatible: transcribe posts multipart to /audio/transcriptions', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, init });
+    return new Response(JSON.stringify({ text: ' hello world ' }), { status: 200 });
+  };
+  const p = createOpenAICompatibleProvider({ baseUrl: 'https://api.groq.com/openai/v1', apiKey: 'g', model: 'm', fetchImpl });
+  const out = await p.transcribe({ data: Buffer.from('RIFF....').toString('base64'), mediaType: 'audio/wav', language: 'en' });
+  assert.equal(out.text, 'hello world');
+  assert.equal(out.model, 'whisper-large-v3-turbo');
+  assert.equal(calls[0].url, 'https://api.groq.com/openai/v1/audio/transcriptions');
+  assert.equal(calls[0].init.headers.Authorization, 'Bearer g');
+  const form = calls[0].init.body;
+  assert.equal(form.get('model'), 'whisper-large-v3-turbo');
+  assert.equal(form.get('language'), 'en');
+  assert.equal(form.get('file').type, 'audio/wav');
+
+  const bad = createOpenAICompatibleProvider({ baseUrl: 'http://x/v1', model: 'm', fetchImpl: async () => new Response('{}', { status: 413 }) });
+  await assert.rejects(bad.transcribe({ data: 'AAAA' }), (e) => e.status === 413);
 });

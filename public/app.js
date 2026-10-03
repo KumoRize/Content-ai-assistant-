@@ -1,7 +1,9 @@
+import { analyzeSamples, encodeWav16, mixToMono, stereoCorrelation } from './audio-features.js';
+
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
-const state = { config: null, health: null, files: { caption: [], score: [], analyze: [], thumbnail: [], artcover: [] }, busy: false };
+const state = { config: null, health: null, audio: null, files: { caption: [], score: [], music: [], analyze: [], thumbnail: [], artcover: [] }, busy: false };
 const FRAMES_PER_VIDEO = 6;
 const MAX_EDGE = 1280;
 
@@ -209,7 +211,7 @@ function renderPreviews(assistant) {
   );
 }
 
-$$('.dropzone').forEach((zone) => {
+$$('.dropzone[data-for]').forEach((zone) => {
   const input = $('input', zone);
   const assistant = zone.dataset.for;
   zone.addEventListener('click', () => input.click());
@@ -259,6 +261,24 @@ const builders = {
     useLiveTrends: checked(p, 'useLiveTrends'),
     webSearch: checked(p, 'webSearch'),
   }),
+  music: (p) => ({
+    images: payloadImages('music'),
+    features: state.audio?.features ?? null,
+    track: {
+      title: val(p, 't_title'),
+      artist: val(p, 't_artist'),
+      genre: val(p, 't_genre'),
+      mood: val(p, 't_mood'),
+      language: val(p, 't_language'),
+      soundsLike: val(p, 't_soundsLike'),
+      releaseDate: val(p, 't_releaseDate'),
+    },
+    description: val(p, 'description'),
+    lyrics: val(p, 'lyrics'),
+    instructions: val(p, 'instructions'),
+    useLiveTrends: checked(p, 'useLiveTrends'),
+    webSearch: checked(p, 'webSearch'),
+  }),
   analyze: (p) => ({
     images: payloadImages('analyze'),
     context: val(p, 'context'),
@@ -299,7 +319,7 @@ async function run(assistant, button) {
   if (state.busy) return;
   const panel = $(`#panel-${assistant}`);
   const out = $(`#result-${assistant}`);
-  const body = { ...builders[assistant](panel), profile: getProfile(), geo: $('#geo').value };
+  const body = { ...builders[assistant](panel), profile: getProfile(), geo: $('#geo').value, engine: $('#engine').value };
   state.busy = true;
   const label = button.textContent;
   button.disabled = true;
@@ -332,6 +352,7 @@ const warn = (ws) => (ws?.length ? el('div', { class: 'warn' }, ws.join(' ')) : 
 
 function renderMeta(meta, result) {
   const bits = [`${meta.provider} · ${meta.model}`];
+  if (meta.fellBackFrom?.length) bits.push(`(switched automatically: ${meta.fellBackFrom.map((e) => state.health.engines[e]?.label ?? e).join(', ')} was unavailable)`);
   if (meta.trendSources?.length) bits.push(`trends: ${meta.trendSources.join(', ')}`);
   if (meta.webSearch) bits.push('web search on');
   const download = () => {
@@ -352,7 +373,83 @@ const pctBar = (label, value, reason) =>
     el('div', { class: 'score' }, el('span', {}, label), el('div', { class: `bar ${level(value)}` }, el('i', { style: `width:${value ?? 0}%` })), el('b', {}, value == null ? '-' : `${value}%`)),
     reason ? el('p', { class: 'muted reason' }, reason) : '');
 
+const svgNS = 'http://www.w3.org/2000/svg';
+function svg(tag, attrs = {}, ...children) {
+  const node = document.createElementNS(svgNS, tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  for (const c of children) node.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  return node;
+}
+const fmt = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
+
+function energyChart(curve, step, highlight) {
+  const W = 600;
+  const H = 120;
+  const total = curve.length * step;
+  const x = (sec) => (sec / total) * W;
+  const pts = curve.map((v, i) => `${x(i * step + step / 2).toFixed(1)},${(H - 14 - (v / 100) * (H - 24)).toFixed(1)}`);
+  const chart = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'energy', role: 'img', 'aria-label': 'Energy over time' });
+  if (highlight) chart.append(svg('rect', { x: x(highlight.start), y: 0, width: Math.max(2, x(highlight.end) - x(highlight.start)), height: H - 14, class: 'hl' }));
+  chart.append(svg('polyline', { points: pts.join(' '), class: 'line' }));
+  for (let t = 0; t <= total; t += total > 240 ? 60 : 30) chart.append(svg('text', { x: Math.min(W - 18, x(t)), y: H - 2, class: 'axis' }, fmt(t)));
+  return chart;
+}
+
+function momentumChart(values, peakWeek, releaseDate) {
+  const start = releaseDate ? new Date(`${releaseDate}T00:00:00`) : null;
+  return el('div', { class: 'momentum' }, values.map((v, i) => {
+    const label = start ? new Date(start.getTime() + i * 7 * 86400000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : `W${i + 1}`;
+    return el('div', { class: `mcol${i + 1 === peakWeek ? ' peak' : ''}`, title: `Week ${i + 1}: ${v}%` },
+      el('span', { class: 'mval' }, v),
+      el('div', { class: 'mbar' }, el('i', { style: `height:${v}%` })),
+      el('span', { class: 'mlab' }, label));
+  }));
+}
+
+const MUSIC_LABELS = { catchiness: 'Catchiness / hook', production: 'Production', mixQuality: 'Mix & master', originality: 'Originality', lyrics: 'Lyrics', replayValue: 'Replay value', viralSnippet: 'Viral clip potential', genreTrendFit: 'Genre trend fit' };
+
 const renderers = {
+  music(r) {
+    const tl = r.timeline;
+    return el('div', {},
+      el('div', { class: 'card rings' },
+        ring(r.overall, 'Overall', `Grade ${r.grade}`),
+        ring(r.trendingPotential, 'Trending potential'),
+        ring(r.strength, 'Strength'),
+      ),
+      el('div', { class: `confidence ${r.confidence}` }, `Confidence: ${r.confidence}. `, r.confidenceNote),
+      r.verdict ? section('Verdict', el('p', {}, r.verdict)) : '',
+      r.measured ? section('Peak moment',
+        r.peakMoment ? el('p', {}, el('b', { class: 'peak-time' }, r.peakMoment.label), ' ', r.peakMoment.why) : el('p', { class: 'muted' }, 'No peak moment returned.'),
+        energyChart(r.measured.energyCurve, r.measured.curveStepSec, r.peakMoment),
+        el('p', { class: 'muted small' }, [`Length ${r.measured.duration}`, r.measured.bpm && `~${r.measured.bpm} BPM`, r.measured.dropAt && `drop at ${r.measured.dropAt}`, r.measured.loudness != null && `${r.measured.loudness} dBFS avg`].filter(Boolean).join(' · ')),
+      ) : r.peakMoment ? section('Peak moment', el('p', {}, el('b', { class: 'peak-time' }, r.peakMoment.label), ' ', r.peakMoment.why)) : '',
+      r.snippets.length ? section('Best clips to post', ...r.snippets.map((sn) => el('div', { class: 'improve low' }, el('span', { class: 'gain' }, sn.label), el('b', {}, sn.useFor), el('p', { class: 'muted' }, sn.why)))) : '',
+      section('Trend timeline',
+        el('div', { class: 'tl-stats' },
+          el('div', {}, el('small', {}, 'Time to peak'), el('b', {}, tl.timeToPeak || '-')),
+          el('div', {}, el('small', {}, 'Peak week'), el('b', {}, tl.peakWeek ? `Week ${tl.peakWeek}` : '-')),
+          el('div', {}, el('small', {}, 'Trendable for'), el('b', {}, tl.trendLifespanWeeks != null ? `~${tl.trendLifespanWeeks} weeks` : '-')),
+        ),
+        tl.momentumByWeek.length ? momentumChart(tl.momentumByWeek, tl.peakWeek, tl.releaseDate) : '',
+        el('p', { class: 'muted small' }, 'Predicted momentum per week after release. This is an estimate, not a guarantee.'),
+        tl.bestReleaseTiming ? el('p', {}, el('b', {}, 'Best release timing: '), tl.bestReleaseTiming) : '',
+        ...tl.phases.map((ph) => el('div', { class: 'phase' }, el('div', { class: 'phase-head' }, el('b', {}, ph.phase), el('span', { class: 'pill' }, ph.when)), ph.focus ? el('p', {}, ph.focus) : '', list(ph.actions))),
+      ),
+      section('Score breakdown', ...r.criteria.map((c) => pctBar(MUSIC_LABELS[c.key] ?? c.key, c.score, c.reason))),
+      section('Trending potential by platform', ...r.platformPotential.map((p) => pctBar(p.label, p.potential, p.reason))),
+      el('div', { class: 'grid2' },
+        section('What makes it strong', ...r.strengths.map((s) => el('div', { class: `improve ${s.impact === 'high' ? 'low' : 'medium'}` }, el('span', { class: 'pill' }, `${s.impact} impact`), el('span', {}, s.point)))),
+        section('What holds it back', list(r.weaknesses)),
+      ),
+      section('How to improve it',
+        ...r.improvements.map((i) => el('div', { class: 'improve high' }, el('span', { class: 'gain' }, `+${i.estimatedGain}%`), i.criterion ? el('span', { class: 'pill' }, MUSIC_LABELS[i.criterion] ?? i.criterion) : '', el('b', {}, i.action), el('p', { class: 'muted' }, i.why))),
+        el('p', { class: 'muted small' }, 'Gains are estimates per criterion, not guarantees.'),
+      ),
+      r.trendMatches.length ? section('Trends it can ride', el('div', { class: 'trend-insights' }, r.trendMatches.map((t) => el('div', {}, el('b', {}, t.trend), el('span', { class: 'pill' }, t.source), el('p', { class: 'muted' }, t.howToUse))))) : '',
+    );
+  },
+
   score(r) {
     return el('div', {},
       el('div', { class: 'card rings' },
@@ -482,6 +579,123 @@ const renderers = {
   },
 };
 
+// ---------- music: audio analysis + transcription ----------
+const MAX_AUDIO_BYTES = 80 * 1024 * 1024;
+const TRANSCRIBE_SECONDS = 360;
+
+async function decodeAudio(file) {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  const ctx = new Ctx();
+  try {
+    return await ctx.decodeAudioData(await file.arrayBuffer());
+  } finally {
+    ctx.close?.();
+  }
+}
+
+async function loadAudio(file) {
+  const box = $('#audioSummary');
+  if (!file.type.startsWith('audio/') && !/\.(mp3|wav|m4a|aac|ogg|flac|opus)$/i.test(file.name)) return toast(`"${file.name}" is not an audio file.`, true);
+  if (file.size > MAX_AUDIO_BYTES) return toast('Audio file is larger than 80 MB.', true);
+  box.classList.remove('hidden');
+  box.replaceChildren(el('div', { class: 'loading' }, el('span', { class: 'spinner' }), `Analyzing ${file.name}…`));
+  await new Promise((r) => setTimeout(r, 30)); // let the spinner paint
+  try {
+    const buffer = await decodeAudio(file);
+    const channels = Array.from({ length: buffer.numberOfChannels }, (_, i) => buffer.getChannelData(i));
+    const features = analyzeSamples(mixToMono(channels), buffer.sampleRate);
+    if (channels.length > 1) features.stereoCorrelation = stereoCorrelation(channels[0], channels[1]);
+    state.audio = { file, buffer, features };
+    if (!$('#panel-music [name=t_title]').value) $('#panel-music [name=t_title]').value = file.name.replace(/\.[^.]+$/, '');
+    box.replaceChildren(
+      el('div', { class: 'audio-head' },
+        el('b', {}, file.name),
+        el('span', { class: 'muted' }, [fmt(features.durationSec), features.bpm && `~${features.bpm} BPM`, features.dropAtSec != null && `drop at ${fmt(features.dropAtSec)}`, `${features.rmsDb} dBFS avg`].filter(Boolean).join(' · ')),
+        el('button', { type: 'button', class: 'copy', onclick: () => { state.audio = null; box.classList.add('hidden'); } }, 'Remove'),
+      ),
+      energyChart(features.energyCurve, features.curveStepSec, features.bestSnippet15),
+      el('p', { class: 'muted small' }, features.bestSnippet15 ? `Highlighted: highest-energy 15s (${fmt(features.bestSnippet15.start)}–${fmt(features.bestSnippet15.end)})` : ''),
+    );
+  } catch {
+    state.audio = null;
+    box.replaceChildren(el('div', { class: 'error-box' }, `Your browser couldn't decode "${file.name}". Try MP3 or WAV.`));
+  }
+}
+
+const audioDrop = $('#audioDrop');
+const audioInput = $('input', audioDrop);
+audioDrop.addEventListener('click', () => audioInput.click());
+audioDrop.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === ' ') && audioInput.click());
+audioInput.addEventListener('change', () => { if (audioInput.files[0]) loadAudio(audioInput.files[0]); audioInput.value = ''; });
+audioDrop.addEventListener('dragover', (e) => { e.preventDefault(); audioDrop.classList.add('over'); });
+audioDrop.addEventListener('dragleave', () => audioDrop.classList.remove('over'));
+audioDrop.addEventListener('drop', (e) => { e.preventDefault(); audioDrop.classList.remove('over'); if (e.dataTransfer.files[0]) loadAudio(e.dataTransfer.files[0]); });
+
+function toBase64(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+async function to16kMonoWav(buffer, maxSeconds) {
+  const seconds = Math.min(buffer.duration, maxSeconds);
+  const offline = new OfflineAudioContext(1, Math.ceil(seconds * 16000), 16000);
+  const src = offline.createBufferSource();
+  src.buffer = buffer;
+  src.connect(offline.destination);
+  src.start(0, 0, seconds);
+  const rendered = await offline.startRendering();
+  return encodeWav16(rendered.getChannelData(0), 16000);
+}
+
+$('#transcribeBtn').addEventListener('click', async () => {
+  const btn = $('#transcribeBtn');
+  const note = $('#transcribeNote');
+  if (!state.audio) return toast('Upload the track first.', true);
+  btn.disabled = true;
+  note.textContent = 'Transcribing… (about 10-30 seconds)';
+  try {
+    const wav = await to16kMonoWav(state.audio.buffer, TRANSCRIBE_SECONDS);
+    const res = await fetch('/api/transcribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ audio: { data: toBase64(wav), mediaType: 'audio/wav' } }) });
+    const data = await res.json().catch(() => ({ error: `Server error (${res.status}).` }));
+    if (!res.ok) throw new Error(data.error);
+    if (!data.text) throw new Error('No vocals detected (instrumental?).');
+    $('#panel-music [name=lyrics]').value = data.text;
+    note.textContent = `Done${state.audio.buffer.duration > TRANSCRIBE_SECONDS ? ' (first 6 minutes)' : ''}. Check and fix any mistakes.`;
+  } catch (err) {
+    note.textContent = '';
+    toast(err.message || 'Transcription failed.', true);
+  } finally {
+    btn.disabled = !state.health?.transcription;
+  }
+});
+
+// ---------- engine picker ----------
+function setupEngines() {
+  const sel = $('#engine');
+  const engines = state.health.engines ?? {};
+  sel.replaceChildren(
+    el('option', { value: 'auto' }, Object.keys(engines).length > 1 ? 'Auto (with fallback)' : 'Auto'),
+    ...Object.entries(engines).map(([key, e]) => el('option', { value: key }, `${e.label} · ${e.model}`)),
+  );
+  const saved = store.get('engine', 'auto');
+  sel.value = [...sel.options].some((o) => o.value === saved) ? saved : 'auto';
+  const sync = () => {
+    const chosen = sel.value === 'auto' ? state.health.preferred : sel.value;
+    const canSearch = Boolean(engines[chosen]?.webSearch);
+    $$('.check.ws').forEach((l) => {
+      l.classList.toggle('disabled', !canSearch);
+      $('input', l).disabled = !canSearch;
+      l.title = canSearch ? '' : 'Live web search needs the Claude engine.';
+    });
+  };
+  sel.addEventListener('change', () => { store.set('engine', sel.value); sync(); });
+  sync();
+  const tb = $('#transcribeBtn');
+  tb.disabled = !state.health.transcription;
+  if (!state.health.transcription) tb.title = 'Needs the open-source engine (free Groq key) on the server.';
+}
+
 // ---------- trends ----------
 async function loadTrends() {
   const box = $('#trendList');
@@ -516,16 +730,14 @@ async function boot() {
   loadProfile();
   const status = $('#status');
   if (state.health.configured) {
-    status.textContent = `AI ready · ${state.health.model}`;
+    status.textContent = `AI ready · ${Object.values(state.health.engines).map((e) => e.label).join(' + ')}`;
     status.classList.add('ok');
   } else {
     status.textContent = 'AI not configured';
     status.classList.add('bad');
     $('#setupBanner').classList.remove('hidden');
   }
-  if (!state.health.webSearch) {
-    $$('.check.ws').forEach((l) => { l.classList.add('disabled'); $('input', l).disabled = true; l.title = 'Live web search needs the Claude provider.'; });
-  }
+  setupEngines();
   const geo = store.get('geo', 'US');
   if ([...$('#geo').options].some((o) => o.value === geo)) $('#geo').value = geo;
   showTab(store.get('tab', 'caption'));
