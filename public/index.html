@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Content AI Studio</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%E2%9C%A6%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo">✦</span> Content AI Studio</div>
+    <div id="status" class="status">Checking AI…</div>
+  </header>
+
+  <div id="setupBanner" class="banner hidden">
+    No AI provider is configured. Copy <code>.env.example</code> to <code>.env</code>, add your <code>ANTHROPIC_API_KEY</code>
+    (or an open-source model endpoint) and restart the server.
+  </div>
+
+  <div class="layout">
+    <nav class="tabs" id="tabs">
+      <button data-tab="caption" class="active"><b>Caption &amp; Hashtag AI</b><small>Descriptions, captions, tags per platform</small></button>
+      <button data-tab="analyze"><b>Content Analytics AI</b><small>Score &amp; fix your content</small></button>
+      <button data-tab="ideas"><b>Trend Idea AI</b><small>Viral ideas from one prompt</small></button>
+      <button data-tab="thumbnail"><b>Thumbnail Prompt AI</b><small>Prompts for every ratio</small></button>
+      <button data-tab="artcover"><b>Cover Art Prompt AI</b><small>Music cover prompts from 5 refs</small></button>
+      <button data-tab="profile"><b>My Brand Profile</b><small>Applied to every assistant</small></button>
+      <div class="trend-box">
+        <div class="trend-head"><b>Live trend radar</b>
+          <select id="geo" aria-label="Region">
+            <option>US</option><option>GB</option><option>IN</option><option>PK</option><option>CA</option><option>AU</option>
+            <option>DE</option><option>FR</option><option>BR</option><option>AE</option><option>SA</option><option>NG</option>
+            <option>ID</option><option>PH</option><option>MX</option><option>ES</option><option>IT</option><option>JP</option>
+          </select>
+        </div>
+        <div id="trendList" class="trend-list">Loading…</div>
+      </div>
+    </nav>
+
+    <main>
+      <!-- CAPTION -->
+      <section class="panel active" id="panel-caption">
+        <h1>Caption &amp; Hashtag AI</h1>
+        <p class="lead">Upload a reel, video, post or image. Get platform-native titles, captions, hashtags and keywords.</p>
+        <div class="dropzone" data-for="caption" tabindex="0">
+          <input type="file" accept="image/*,video/*" multiple hidden />
+          <p><b>Drop images / videos here</b> or click to choose. Videos are sampled into frames in your browser.</p>
+        </div>
+        <div class="previews" data-previews="caption"></div>
+        <div class="grid2">
+          <label>Material type
+            <select name="mediaKind">
+              <option value="reel">Reel / Short</option><option value="short video">Short video</option><option value="long video">Long video</option>
+              <option value="image post">Image post</option><option value="carousel">Carousel</option><option value="story">Story</option><option value="other">Other</option>
+            </select>
+          </label>
+          <label>What's in it / transcript (optional)<input name="context" placeholder="e.g. Street food tour in Lahore, spicy challenge" /></label>
+        </div>
+        <label>Platforms</label>
+        <div class="chips" data-chips="platforms"></div>
+        <label>Your instructions: tell the AI exactly what you want
+          <textarea name="instructions" rows="4" placeholder="Example: Funny, Gen-Z tone. Mention my brand 'SpiceRoute'. Target foodies in the UK. Make the YouTube title curiosity-driven, under 60 chars. Urdu + English mix for Instagram."></textarea>
+        </label>
+        <div class="presets" data-target="instructions">
+          <span>Quick add:</span>
+          <button type="button">Make it emotional and story-driven.</button>
+          <button type="button">Use curiosity gaps, no clickbait lies.</button>
+          <button type="button">Keep captions short and punchy.</button>
+          <button type="button">Add a question to drive comments.</button>
+        </div>
+        <div class="options">
+          <label class="check"><input type="checkbox" name="useLiveTrends" checked /> Use live trend data</label>
+          <label class="check ws"><input type="checkbox" name="webSearch" /> Live web search for trending hashtags (slower, Claude only)</label>
+        </div>
+        <button class="go" data-run="caption">Generate captions &amp; hashtags</button>
+        <div class="result" id="result-caption"></div>
+      </section>
+
+      <!-- ANALYZE -->
+      <section class="panel" id="panel-analyze">
+        <h1>Content Analytics AI</h1>
+        <p class="lead">Give it your content (and its numbers, if it's already posted). Get scores, what's wrong, and exactly how to fix it.</p>
+        <div class="dropzone" data-for="analyze" tabindex="0">
+          <input type="file" accept="image/*,video/*" multiple hidden />
+          <p><b>Drop the content to analyze</b> or click to choose.</p>
+        </div>
+        <div class="previews" data-previews="analyze"></div>
+        <div class="grid2">
+          <label>Platform<select name="platform" data-platform-select></select></label>
+          <label>Description / transcript (optional)<input name="context" placeholder="What happens, what you say" /></label>
+        </div>
+        <details>
+          <summary>Performance numbers (optional; leave blank for a pre-publish audit)</summary>
+          <div class="grid4">
+            <label>Views<input type="number" min="0" name="m_views" /></label>
+            <label>Likes<input type="number" min="0" name="m_likes" /></label>
+            <label>Comments<input type="number" min="0" name="m_comments" /></label>
+            <label>Shares<input type="number" min="0" name="m_shares" /></label>
+            <label>Saves<input type="number" min="0" name="m_saves" /></label>
+            <label>Followers<input type="number" min="0" name="m_followers" /></label>
+            <label>Avg watch (sec)<input type="number" min="0" step="0.1" name="m_avgWatchSeconds" /></label>
+            <label>Video length (sec)<input type="number" min="0" step="0.1" name="m_durationSeconds" /></label>
+          </div>
+        </details>
+        <label>What do you want to know?
+          <textarea name="instructions" rows="3" placeholder="Example: Why did this reel stop at 2k views? Is my hook strong enough? How do I make the next one go viral?"></textarea>
+        </label>
+        <div class="options">
+          <label class="check"><input type="checkbox" name="useLiveTrends" checked /> Compare with live trends</label>
+          <label class="check ws"><input type="checkbox" name="webSearch" /> Live web search (Claude only)</label>
+        </div>
+        <button class="go" data-run="analyze">Analyze my content</button>
+        <div class="result" id="result-analyze"></div>
+      </section>
+
+      <!-- IDEAS -->
+      <section class="panel" id="panel-ideas">
+        <h1>Trend Idea AI</h1>
+        <p class="lead">One simple prompt in, a ranked list of ideas with hooks and shot lists out.</p>
+        <label>Your prompt
+          <textarea name="prompt" rows="3" placeholder="e.g. cooking videos for students on a budget"></textarea>
+        </label>
+        <div class="grid2">
+          <label>How many ideas<input type="number" name="count" min="1" max="15" value="8" /></label>
+          <span></span>
+        </div>
+        <label>Platforms</label>
+        <div class="chips" data-chips="platforms"></div>
+        <div class="options">
+          <label class="check"><input type="checkbox" name="useLiveTrends" checked /> Use live trend data</label>
+          <label class="check ws"><input type="checkbox" name="webSearch" /> Live web search (Claude only)</label>
+        </div>
+        <button class="go" data-run="ideas">Generate ideas</button>
+        <div class="result" id="result-ideas"></div>
+      </section>
+
+      <!-- THUMBNAIL -->
+      <section class="panel" id="panel-thumbnail">
+        <h1>Thumbnail Prompt AI</h1>
+        <p class="lead">Upload your video or photos. Get image-AI prompts for every aspect ratio, each laid out for its shape.</p>
+        <div class="dropzone" data-for="thumbnail" tabindex="0">
+          <input type="file" accept="image/*,video/*" multiple hidden />
+          <p><b>Drop your video / photos</b> or click to choose.</p>
+        </div>
+        <div class="previews" data-previews="thumbnail"></div>
+        <div class="grid2">
+          <label>Video / post title<input name="title" placeholder="I survived 24 hours in the desert" /></label>
+          <label>Text on thumbnail (optional)<input name="textOverlay" maxlength="100" placeholder="NO WATER?!" /></label>
+          <label>Image AI you use<select name="targetModel" data-models></select></label>
+          <label>Description (optional)<input name="context" placeholder="What the video is about" /></label>
+        </div>
+        <label>Aspect ratios</label>
+        <div class="chips" data-chips="ratios"></div>
+        <label>Styles (optional)</label>
+        <div class="chips" data-chips="thumbnailStyles"></div>
+        <label>Your instructions
+          <textarea name="instructions" rows="3" placeholder="Example: Me on the left with a shocked face, red/yellow palette, big arrow pointing at the empty bottle."></textarea>
+        </label>
+        <button class="go" data-run="thumbnail">Create thumbnail prompts</button>
+        <div class="result" id="result-thumbnail"></div>
+      </section>
+
+      <!-- ART COVER -->
+      <section class="panel" id="panel-artcover">
+        <h1>Cover Art Prompt AI</h1>
+        <p class="lead">Add up to 5 reference pictures and your track details. Get a master cover prompt, variations, and Canvas/visualizer formats.</p>
+        <div class="dropzone" data-for="artcover" tabindex="0">
+          <input type="file" accept="image/*" multiple hidden />
+          <p><b>Drop up to 5 reference images</b> or click to choose.</p>
+        </div>
+        <div class="previews" data-previews="artcover"></div>
+        <div class="grid2">
+          <label>Track title<input name="t_title" placeholder="Midnight Drive" /></label>
+          <label>Artist<input name="t_artist" placeholder="Your artist name" /></label>
+          <label>Genre<input name="t_genre" placeholder="Phonk, Lo-fi, Afrobeats, Punjabi drill…" /></label>
+          <label>Mood / energy<input name="t_mood" placeholder="Dark, nostalgic, fast" /></label>
+          <label>Image AI you use<select name="targetModel" data-models></select></label>
+          <label class="check inline"><input type="checkbox" name="includeText" /> Render title &amp; artist text in the image</label>
+        </div>
+        <label>Themes / lyric lines (optional)<textarea name="t_themes" rows="2" placeholder="Driving alone through neon city after a breakup"></textarea></label>
+        <label>Styles (optional)</label>
+        <div class="chips" data-chips="coverStyles"></div>
+        <label>Your instructions
+          <textarea name="instructions" rows="3" placeholder="Example: Keep the purple haze from ref 2 and the car silhouette from ref 4. No faces. Feel like a 90s anime still."></textarea>
+        </label>
+        <button class="go" data-run="artcover">Create cover art prompts</button>
+        <div class="result" id="result-artcover"></div>
+      </section>
+
+      <!-- PROFILE -->
+      <section class="panel" id="panel-profile">
+        <h1>My Brand Profile</h1>
+        <p class="lead">Saved in this browser and sent with every request so every assistant writes like you.</p>
+        <div class="grid2" id="profileForm">
+          <label>Niche<input name="niche" placeholder="Fitness for busy moms" /></label>
+          <label>Target audience<input name="audience" placeholder="Women 25-40, US/UK" /></label>
+          <label>Tone / voice<input name="tone" placeholder="Warm, funny, no-nonsense" /></label>
+          <label>Output language<input name="language" placeholder="English" /></label>
+          <label>Words to include<input name="brandWords" placeholder="Brand name, catchphrase" /></label>
+          <label>Never use<input name="avoid" placeholder="'hustle', 'grind', excessive emojis" /></label>
+        </div>
+        <button class="go" id="saveProfile">Save profile</button>
+        <span id="profileSaved" class="muted"></span>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="app.js" type="module"></script>
+</body>
+</html>
