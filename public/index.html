@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Content AI Studio</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%E2%9C%A6%3C/text%3E%3C/svg%3E" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#8b5cf6" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Content AI" />
   <link rel="stylesheet" href="styles.css" />
   <!-- Free AI with no API key: each user signs in to their own free Puter account -->
   <script src="https://js.puter.com/v2/"></script>
@@ -13,6 +18,7 @@
   <header class="topbar">
     <div class="brand"><span class="logo">✦</span> Content AI Studio</div>
     <div class="top-right">
+      <button type="button" id="downloadBtn" class="download-btn">⬇ Download app</button>
       <label class="engine">AI engine
         <select id="engine" aria-label="AI engine"><option value="auto">Auto</option></select>
       </label>
@@ -285,6 +291,24 @@
         <span id="profileSaved" class="muted"></span>
       </section>
     </main>
+  </div>
+
+  <div id="downloadModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="downloadTitle">
+    <div class="modal-card">
+      <button type="button" class="modal-close" id="downloadClose" aria-label="Close">×</button>
+      <h2 id="downloadTitle">Download Content AI Studio</h2>
+      <div class="dl-option">
+        <h3>📱 Install as an app</h3>
+        <p class="muted">Adds Content AI Studio to your phone's home screen or your computer's apps. Opens in its own window, no app store needed.</p>
+        <button type="button" class="go" id="installBtn">Install app</button>
+        <div id="installHelp" class="install-help hidden"></div>
+      </div>
+      <div class="dl-option">
+        <h3>💻 Download the code</h3>
+        <p class="muted">Get the full app as a .zip to run on your own computer or server (needs Node.js 20+). Unzip, then run <code>npm install</code> and <code>npm start</code>, and open http://localhost:3000.</p>
+        <a class="secondary dl-link" href="/download/source.zip" download>Download source (.zip)</a>
+      </div>
+    </div>
   </div>
 
   <div id="toast" class="toast hidden"></div>

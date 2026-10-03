@@ -203,3 +203,17 @@ td:last-child { text-align: right; font-weight: 700; }
 .phase .pill { text-transform: none; }
 .hintbar { max-width: 1400px; margin: 0 auto; padding: 0 20px; }
 #engineHint:not(:empty) { display: block; margin-top: 12px; font-size: 13px; color: var(--muted); }
+.download-btn { border: 0; border-radius: 10px; padding: 7px 14px; font-weight: 700; color: #fff; cursor: pointer; background: linear-gradient(135deg, var(--accent), var(--accent2)); white-space: nowrap; }
+.modal { position: fixed; inset: 0; background: rgba(0, 0, 0, .55); display: flex; align-items: center; justify-content: center; z-index: 30; padding: 16px; }
+.modal-card { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; width: 100%; max-width: 520px; max-height: calc(100vh - 32px); overflow-y: auto; }
+.modal-card h2 { margin: 0 0 8px; font-size: 20px; }
+.modal-close { position: absolute; top: 10px; right: 12px; border: 0; background: transparent; font-size: 26px; cursor: pointer; color: var(--muted); line-height: 1; }
+.dl-option { border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-top: 14px; }
+.dl-option h3 { margin: 0 0 6px; font-size: 16px; }
+.dl-option .go { margin-top: 6px; }
+.dl-link { display: inline-block; text-decoration: none; margin-top: 4px; }
+.install-help { margin-top: 10px; font-size: 14px; padding: 10px 12px; border-radius: 10px; background: rgba(139, 92, 246, .1); border: 1px solid var(--accent); }
+code { font-size: 13px; background: var(--bg); padding: 1px 5px; border-radius: 5px; }
+@media (max-width: 860px) {
+  .download-btn { padding: 6px 10px; font-size: 13px; }
+}

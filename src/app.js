@@ -9,8 +9,10 @@ import { COVER_STYLES, IMAGE_MODELS, PLATFORMS, RATIOS, THUMBNAIL_STYLES } from 
 import * as v from './util.js';
 import { basicAvailable, generateBasic, BASIC_NOTE } from './basic.js';
 import { randomUUID } from 'node:crypto';
+import { buildSourceZip } from './zip.js';
 
-const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
+const rootDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const publicDir = path.join(rootDir, 'public');
 
 function rateLimiter(perMinute) {
   const hits = new Map();
@@ -110,6 +112,18 @@ export function createApp({ providers = {}, provider = null, preferred = 'claude
       },
     };
   }
+
+  // Source code download, built once on first request (files don't change while running).
+  let sourceZip = null;
+  app.get('/download/source.zip', (req, res, next) => {
+    try {
+      sourceZip ??= buildSourceZip(rootDir);
+      res.set({ 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="content-ai-studio.zip"', 'Cache-Control': 'no-cache' });
+      res.send(sourceZip);
+    } catch (err) {
+      next(err);
+    }
+  });
 
   app.get('/api/health', (req, res) => {
     res.json({

@@ -41,5 +41,5 @@ export async function startApp(opts) {
     const res = await fetch(base + path);
     return { status: res.status, body: await res.json() };
   };
-  return { post, get, close: () => new Promise((r) => server.close(r)) };
+  return { base, post, get, close: () => new Promise((r) => server.close(r)) };
 }

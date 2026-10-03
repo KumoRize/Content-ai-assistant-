@@ -845,6 +845,57 @@ async function loadTrends() {
 }
 $('#geo').addEventListener('change', () => { store.set('geo', $('#geo').value); loadTrends(); });
 
+// ---------- download / install ----------
+let installEvent = null;
+const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault(); // show our own button instead of the browser's mini-bar
+  installEvent = e;
+});
+window.addEventListener('appinstalled', () => {
+  installEvent = null;
+  toast('Installed! Find Content AI Studio on your home screen or app list.');
+  $('#downloadModal').classList.add('hidden');
+});
+
+function installInstructions() {
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod/i.test(ua)) return 'On iPhone/iPad: open this site in Safari, tap the Share button (square with an arrow), then "Add to Home Screen".';
+  if (/Android/i.test(ua)) return 'On Android: open the browser menu (⋮) and tap "Install app" or "Add to Home screen".';
+  if (/Firefox/i.test(ua)) return 'Firefox on computers can\'t install web apps. Open this site in Chrome or Edge and click the install icon in the address bar.';
+  if (/Safari/i.test(ua) && !/Chrome|Edg/i.test(ua)) return 'On Mac Safari: choose File > Add to Dock.';
+  return 'In Chrome or Edge: click the install icon at the right end of the address bar, or open the menu (⋮) and choose "Install Content AI Studio".';
+}
+
+$('#downloadBtn').addEventListener('click', () => {
+  const help = $('#installHelp');
+  help.classList.add('hidden');
+  $('#installBtn').textContent = isStandalone() ? 'Already installed ✓' : 'Install app';
+  $('#installBtn').disabled = isStandalone();
+  $('#downloadModal').classList.remove('hidden');
+  $('#installBtn').focus();
+});
+$('#downloadClose').addEventListener('click', () => $('#downloadModal').classList.add('hidden'));
+$('#downloadModal').addEventListener('click', (e) => e.target.id === 'downloadModal' && $('#downloadModal').classList.add('hidden'));
+document.addEventListener('keydown', (e) => e.key === 'Escape' && $('#downloadModal').classList.add('hidden'));
+$('#installBtn').addEventListener('click', async () => {
+  if (installEvent) {
+    installEvent.prompt();
+    const { outcome } = await installEvent.userChoice;
+    if (outcome === 'accepted') installEvent = null;
+    return;
+  }
+  // The browser didn't offer a one-click install: show the manual steps for this device.
+  const help = $('#installHelp');
+  help.textContent = installInstructions();
+  help.classList.remove('hidden');
+});
+
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
 // ---------- boot ----------
 async function boot() {
   try {

@@ -1,0 +1,15 @@
+{
+  "name": "Content AI Studio",
+  "short_name": "Content AI",
+  "description": "AI assistants for creators: captions, hashtags, trend scores, music ratings, thumbnail and cover-art prompts.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0d0f17",
+  "theme_color": "#8b5cf6",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
