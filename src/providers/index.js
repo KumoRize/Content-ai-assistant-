@@ -14,8 +14,10 @@ export function createProvidersFromEnv(env = process.env) {
       effort: env.ANTHROPIC_EFFORT || 'high',
     });
   }
-  const ossBase = env.OSS_BASE_URL || (env.OSS_API_KEY ? 'https://api.groq.com/openai/v1' : '');
-  if (ossBase) {
+  const ossBase = env.OSS_BASE_URL || 'https://api.groq.com/openai/v1';
+  // Hosted endpoints need a key; local servers (Ollama, LM Studio) don't.
+  const isLocal = /^https?:\/\/(localhost|127\.|0\.0\.0\.0|host\.docker\.internal|\[::1\])/i.test(ossBase);
+  if (env.OSS_API_KEY || (env.OSS_BASE_URL && isLocal)) {
     providers.oss = createOpenAICompatibleProvider({
       baseUrl: ossBase,
       apiKey: env.OSS_API_KEY,

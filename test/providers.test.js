@@ -126,6 +126,8 @@ test('createProvidersFromEnv builds every configured engine', () => {
   assert.equal(oss.preferred, 'oss');
   assert.equal(oss.providers.oss.model, 'qwen2.5vl');
   assert.throws(() => createProvidersFromEnv({ AI_PROVIDER: 'skynet' }), /Unknown AI_PROVIDER/);
+  // A hosted URL without a key must not show up as a working engine.
+  assert.deepEqual(createProvidersFromEnv({ OSS_BASE_URL: 'https://api.groq.com/openai/v1', OSS_MODEL: 'm' }).providers, {});
 });
 
 test('openai-compatible: transcribe posts multipart to /audio/transcriptions', async () => {
