@@ -19,8 +19,8 @@
   </header>
 
   <div id="setupBanner" class="banner hidden">
-    No AI provider is configured. Copy <code>.env.example</code> to <code>.env</code>, add your <code>ANTHROPIC_API_KEY</code>
-    (or an open-source model endpoint) and restart the server.
+    The free AI isn't switched on yet. Create a free key at <b>console.groq.com/keys</b> (no credit card), then add it as
+    <code>OSS_API_KEY</code> in your server's environment settings (or <code>.env</code> when running locally) and restart.
   </div>
 
   <div class="layout">
@@ -78,7 +78,7 @@
         </div>
         <div class="options">
           <label class="check"><input type="checkbox" name="useLiveTrends" checked /> Use live trend data</label>
-          <label class="check ws"><input type="checkbox" name="webSearch" /> Live web search for trending hashtags (slower, Claude only)</label>
+          <label class="check ws"><input type="checkbox" name="webSearch" /> Live web search for trending hashtags (slower, needs the optional Claude engine)</label>
         </div>
         <button class="go" data-run="caption">Generate captions &amp; hashtags</button>
         <div class="result" id="result-caption"></div>
@@ -109,7 +109,7 @@
         </label>
         <div class="options">
           <label class="check"><input type="checkbox" name="useLiveTrends" checked /> Use live trend data</label>
-          <label class="check ws"><input type="checkbox" name="webSearch" /> Live web search (Claude only)</label>
+          <label class="check ws"><input type="checkbox" name="webSearch" /> Live web search (needs the optional Claude engine)</label>
         </div>
         <button class="go" data-run="score">Rate my material</button>
         <div class="result" id="result-score"></div>
@@ -153,7 +153,7 @@
         </label>
         <div class="options">
           <label class="check"><input type="checkbox" name="useLiveTrends" checked /> Use live trend data</label>
-          <label class="check ws"><input type="checkbox" name="webSearch" /> Live web search for trending sounds (Claude only)</label>
+          <label class="check ws"><input type="checkbox" name="webSearch" /> Live web search for trending sounds (needs the optional Claude engine)</label>
         </div>
         <button class="go" data-run="music">Rate my track</button>
         <div class="result" id="result-music"></div>
@@ -190,7 +190,7 @@
         </label>
         <div class="options">
           <label class="check"><input type="checkbox" name="useLiveTrends" checked /> Compare with live trends</label>
-          <label class="check ws"><input type="checkbox" name="webSearch" /> Live web search (Claude only)</label>
+          <label class="check ws"><input type="checkbox" name="webSearch" /> Live web search (needs the optional Claude engine)</label>
         </div>
         <button class="go" data-run="analyze">Analyze my content</button>
         <div class="result" id="result-analyze"></div>
@@ -211,7 +211,7 @@
         <div class="chips" data-chips="platforms"></div>
         <div class="options">
           <label class="check"><input type="checkbox" name="useLiveTrends" checked /> Use live trend data</label>
-          <label class="check ws"><input type="checkbox" name="webSearch" /> Live web search (Claude only)</label>
+          <label class="check ws"><input type="checkbox" name="webSearch" /> Live web search (needs the optional Claude engine)</label>
         </div>
         <button class="go" data-run="ideas">Generate ideas</button>
         <div class="result" id="result-ideas"></div>

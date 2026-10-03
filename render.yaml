@@ -8,13 +8,7 @@ services:
     healthCheckPath: /api/health
     envVars:
       - key: AI_PROVIDER
-        value: anthropic
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: ANTHROPIC_MODEL
-        value: claude-opus-5-5
-      - key: ANTHROPIC_EFFORT
-        value: high
+        value: openai-compatible
       - key: OSS_API_KEY
         sync: false
       - key: OSS_BASE_URL

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import Anthropic from '@anthropic-ai/sdk';
 import { createAnthropicProvider } from '../src/providers/anthropic.js';
-import { createOpenAICompatibleProvider } from '../src/providers/openaiCompatible.js';
+import { createOpenAICompatibleProvider, fitImages, spreadPick } from '../src/providers/openaiCompatible.js';
 import { createProvidersFromEnv } from '../src/providers/index.js';
 import { PNG } from './helpers.js';
 
@@ -105,7 +105,7 @@ test('openai-compatible: text-only models, errors and truncation', async () => {
   const p1 = createOpenAICompatibleProvider({ baseUrl: 'http://localhost:11434/v1', model: 'llama3', supportsVision: false, fetchImpl: f1 });
   await p1.generate({ system: 's', text: 't', images: [{ mediaType: 'image/png', data: PNG }] });
   assert.equal(typeof f1.calls[0].body.messages[1].content, 'string');
-  assert.match(f1.calls[0].body.messages[1].content, /cannot see images/);
+  assert.match(f1.calls[0].body.messages[1].content, /cannot see them/);
   assert.equal(f1.calls[0].headers.Authorization, undefined);
 
   const p2 = createOpenAICompatibleProvider({ baseUrl: 'http://x/v1', model: 'm', fetchImpl: fakeFetch([{ status: 401, body: { error: { message: 'bad key' } } }]) });
@@ -118,7 +118,8 @@ test('createProvidersFromEnv builds every configured engine', () => {
   assert.deepEqual(createProvidersFromEnv({}).providers, {});
   const both = createProvidersFromEnv({ ANTHROPIC_API_KEY: 'k', OSS_API_KEY: 'g' });
   assert.deepEqual(Object.keys(both.providers), ['claude', 'oss']);
-  assert.equal(both.preferred, 'claude');
+  assert.equal(both.preferred, 'oss', 'the free engine is the default');
+  assert.equal(createProvidersFromEnv({ ANTHROPIC_API_KEY: 'k', OSS_API_KEY: 'g', AI_PROVIDER: 'anthropic' }).preferred, 'claude');
   assert.equal(both.providers.claude.model, 'claude-opus-5-5');
   assert.equal(both.providers.oss.model, 'meta-llama/llama-4-scout-17b-16e-instruct');
   const oss = createProvidersFromEnv({ AI_PROVIDER: 'openai-compatible', OSS_BASE_URL: 'http://localhost:11434/v1', OSS_MODEL: 'qwen2.5vl' });
@@ -149,4 +150,40 @@ test('openai-compatible: transcribe posts multipart to /audio/transcriptions', a
 
   const bad = createOpenAICompatibleProvider({ baseUrl: 'http://x/v1', model: 'm', fetchImpl: async () => new Response('{}', { status: 413 }) });
   await assert.rejects(bad.transcribe({ data: 'AAAA' }), (e) => e.status === 413);
+});
+
+test('fitImages respects image count and size limits', () => {
+  assert.deepEqual(spreadPick([1, 2, 3, 4, 5, 6, 7], 5), [1, 3, 4, 6, 7]);
+  assert.deepEqual(spreadPick([1, 2], 5), [1, 2]);
+  const img = (n) => ({ mediaType: 'image/jpeg', data: 'A'.repeat(n) });
+  const frames = Array.from({ length: 7 }, () => img(1000));
+  assert.equal(fitImages(frames, 5, 1e6).length, 5);
+  assert.equal(fitImages(frames, 5, 3500).length, 3);
+  assert.deepEqual(fitImages([img(5000)], 5, 3500), []);
+});
+
+test('openai-compatible: sends at most 5 images and notes the rest', async () => {
+  const fetchImpl = fakeFetch([{ status: 200, body: { choices: [{ finish_reason: 'stop', message: { content: '{}' } }] } }]);
+  const p = createOpenAICompatibleProvider({ baseUrl: 'http://x/v1', apiKey: 'k', model: 'm', fetchImpl });
+  const images = Array.from({ length: 7 }, () => ({ mediaType: 'image/png', data: PNG }));
+  await p.generate({ system: 's', text: 't', images });
+  const content = fetchImpl.calls[0].body.messages[1].content;
+  assert.equal(content.filter((c) => c.type === 'image_url').length, 5);
+  assert.match(content[0].text, /7 images were uploaded; the 5 attached/);
+});
+
+test('openai-compatible: shrinks max_tokens when the free tier says the request is too large', async () => {
+  const fetchImpl = fakeFetch([
+    { status: 413, body: { error: { message: 'Request too large for model on tokens per minute (TPM): Limit 12000, Requested 14500, please reduce your message size' } } },
+    { status: 200, body: { choices: [{ finish_reason: 'stop', message: { content: '{"ok":1}' } }] } },
+  ]);
+  const p = createOpenAICompatibleProvider({ baseUrl: 'http://x/v1', apiKey: 'k', model: 'm', fetchImpl });
+  assert.equal((await p.generate({ system: 's', text: 't' })).text, '{"ok":1}');
+  assert.equal(fetchImpl.calls[1].body.max_tokens, 8000 - 2500 - 200);
+  assert.deepEqual(fetchImpl.calls[1].body.response_format, { type: 'json_object' }, 'JSON mode kept');
+
+  const hopeless = createOpenAICompatibleProvider({ baseUrl: 'http://x/v1', apiKey: 'k', model: 'm', fetchImpl: fakeFetch([
+    { status: 413, body: { error: { message: 'Limit 6000, Requested 20000' } } },
+  ]) });
+  await assert.rejects(hopeless.generate({ system: 's', text: 't' }), (e) => e.status === 413 && /free AI tier/.test(e.message));
 });

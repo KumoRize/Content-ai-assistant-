@@ -14,13 +14,24 @@ A web app with seven AI assistants for creators. Live at https://content-ai-stud
 
 Every assistant has a **"Your instructions"** box. Write how you want the result, and it takes priority over the defaults. A **Brand Profile** (niche, audience, tone, language, words to use or avoid) is saved in your browser and sent with every request.
 
+## Cost: $0
+
+| Piece | Free option |
+|---|---|
+| AI | Groq free tier: Llama 4 Scout (open-source, sees images) + Whisper. Free key, no credit card |
+| Hosting | Render free web service |
+| Trend data | Google Trends, Wikipedia, Reddit (no key), YouTube Data API (optional free key) |
+| Video/audio analysis | Runs in your browser |
+
+Free-tier limits to know about: Groq's free models allow roughly 30 requests/minute with daily caps, and up to 5 images per request (extra video frames are sampled evenly). Render's free service sleeps after ~15 min idle, so the first visit afterwards takes 30–60 s. Claude is an optional paid extra that adds live web search; leave `ANTHROPIC_API_KEY` empty to stay free.
+
 ## Quick start
 
 ```bash
 npm install
-cp .env.example .env      # then put your key in .env
+cp .env.example .env      # then paste your free Groq key as OSS_API_KEY
 npm start                 # http://localhost:3000
-npm test                  # 46 tests, no network or API key needed
+npm test                  # 49 tests, no network or API key needed
 ```
 
 Requires Node 20+.
@@ -29,10 +40,10 @@ Requires Node 20+.
 
 | Engine | What you need | Notes |
 |---|---|---|
-| Claude | `ANTHROPIC_API_KEY` | Claude Opus 5.5 with vision, structured JSON output, and optional **live web search** for trending hashtags |
+| Claude (optional, paid) | `ANTHROPIC_API_KEY` | Claude Opus 5.5 with vision, structured JSON output, and optional **live web search** for trending hashtags |
 | Open-source (free) | `OSS_API_KEY` (free Groq key) | Llama 4 Scout (vision) + Whisper lyrics transcription on Groq's free tier. Or point `OSS_BASE_URL`/`OSS_MODEL` at OpenRouter, Together, or **Ollama/LM Studio locally** |
 
-Configure one or both. The **AI engine** picker in the top bar chooses per request; **Auto** tries `AI_PROVIDER`'s engine first and switches to the other on rate limits, outages or an empty credit balance.
+The free engine is the default. If you also add Claude, the **AI engine** picker in the top bar chooses per request; **Auto** tries `AI_PROVIDER`'s engine first (free by default) and switches to the other on rate limits, outages or an empty credit balance.
 
 ## Where the trend data comes from
 
@@ -60,7 +71,7 @@ Endpoints: `POST /api/transcribe`, `POST /api/assist/{caption|score|music|analyz
 
 ## Deploy (make it live)
 
-**Render:** push this repo, choose *New → Blueprint*, select the repo (it reads `render.yaml`), and paste your `ANTHROPIC_API_KEY`. Railway, Fly.io and any VPS also work: `npm ci && npm start`, with the env vars from `.env.example`.
+**Render (free):** push this repo, choose *New → Blueprint*, select the repo (it reads `render.yaml`), and paste your free Groq key as `OSS_API_KEY`. Railway, Fly.io and any VPS also work: `npm ci && npm start`, with the env vars from `.env.example`.
 
 ## Assumptions & limits (read these)
 

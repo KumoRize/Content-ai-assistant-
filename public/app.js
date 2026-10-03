@@ -680,6 +680,9 @@ function setupEngines() {
   );
   const saved = store.get('engine', 'auto');
   sel.value = [...sel.options].some((o) => o.value === saved) ? saved : 'auto';
+  const anySearch = Object.values(engines).some((e) => e.webSearch);
+  // Web search only exists on the paid Claude engine: hide it entirely on a free-only setup.
+  $$('.check.ws').forEach((l) => l.classList.toggle('hidden', !anySearch));
   const sync = () => {
     const chosen = sel.value === 'auto' ? state.health.preferred : sel.value;
     const canSearch = Boolean(engines[chosen]?.webSearch);
@@ -730,7 +733,8 @@ async function boot() {
   loadProfile();
   const status = $('#status');
   if (state.health.configured) {
-    status.textContent = `AI ready · ${Object.values(state.health.engines).map((e) => e.label).join(' + ')}`;
+    const labels = Object.values(state.health.engines).map((e) => e.label);
+    status.textContent = `AI ready · ${labels.join(' + ')}`;
     status.classList.add('ok');
   } else {
     status.textContent = 'AI not configured';

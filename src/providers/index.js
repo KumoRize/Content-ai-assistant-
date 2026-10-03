@@ -1,8 +1,6 @@
 import { createAnthropicProvider } from './anthropic.js';
 import { createOpenAICompatibleProvider } from './openaiCompatible.js';
 
-export const ENGINE_LABELS = { claude: 'Claude', oss: 'Open-source (free)' };
-
 // Builds every provider that has credentials. Both can be active at once:
 // the UI lets you pick one, and "Auto" falls back to the other on failure.
 export function createProvidersFromEnv(env = process.env) {
@@ -24,9 +22,11 @@ export function createProvidersFromEnv(env = process.env) {
       model: env.OSS_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct',
       transcribeModel: env.OSS_TRANSCRIBE_MODEL || 'whisper-large-v3-turbo',
       supportsVision: env.OSS_SUPPORTS_VISION !== 'false',
+      maxImages: Number(env.OSS_MAX_IMAGES) || 5,
     });
   }
-  const pref = (env.AI_PROVIDER || 'anthropic').toLowerCase();
+  // The free open-source engine is the default; Claude is an optional paid extra.
+  const pref = (env.AI_PROVIDER || 'openai-compatible').toLowerCase();
   if (!['anthropic', 'claude', 'openai-compatible', 'oss'].includes(pref)) {
     throw new Error(`Unknown AI_PROVIDER "${env.AI_PROVIDER}". Use "anthropic" or "openai-compatible".`);
   }
