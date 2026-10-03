@@ -315,24 +315,140 @@ const builders = {
   }),
 };
 
+async function postJson(url, body) {
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({ error: `Server error (${res.status}).` }));
+  return { ok: res.ok, status: res.status, data };
+}
+
+// ---------- free browser AI (Puter.js: no API key, each user signs in to a free Puter account) ----------
+const puterReady = () => Boolean(window.puter?.ai?.chat);
+const PUTER_MAX_IMAGES = 5;
+
+function spread(list, max) {
+  if (list.length <= max) return list;
+  return Array.from({ length: max }, (_, i) => list[Math.round((i * (list.length - 1)) / (max - 1))]);
+}
+
+function replyText(r) {
+  if (typeof r === 'string') return r;
+  const c = r?.message?.content;
+  if (typeof c === 'string') return c;
+  if (Array.isArray(c)) return c.map((b) => (typeof b === 'string' ? b : b?.text ?? '')).join('');
+  if (typeof r?.text === 'string') return r.text;
+  return typeof r?.toString === 'function' ? String(r) : '';
+}
+
+async function puterChat(messages) {
+  const model = state.config.puterModel;
+  try {
+    const r = await window.puter.ai.chat(messages, model ? { model } : {});
+    return { text: replyText(r), model: model || 'Puter default' };
+  } catch (err) {
+    if (!model) throw err;
+    // The configured model may be unavailable: retry with Puter's default.
+    const r = await window.puter.ai.chat(messages, {});
+    return { text: replyText(r), model: 'Puter default' };
+  }
+}
+
+class PuterError extends Error {
+  constructor(message, token) {
+    super(message);
+    this.token = token;
+  }
+}
+
+async function runPuter(assistant, body) {
+  const prep = await postJson(`/api/assist/${assistant}/prepare`, body);
+  if (!prep.ok) throw new Error(prep.data.error);
+  const { token, system, prompt } = prep.data;
+  const imgs = spread(state.files[assistant] ?? [], PUTER_MAX_IMAGES);
+  const userContent = imgs.length
+    ? [{ type: 'text', text: imgs.length < (state.files[assistant] ?? []).length ? `${prompt}\n\n(${imgs.length} of the uploaded images are attached, spread evenly.)` : prompt }, ...imgs.map((i) => ({ type: 'image_url', image_url: { url: i.preview } }))]
+    : prompt;
+  const messages = [{ role: 'system', content: system }, { role: 'user', content: userContent }];
+  try {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const reply = await puterChat(attempt ? [...messages, { role: 'user', content: 'Respond again with ONE valid JSON object only. No prose, no markdown.' }] : messages);
+      const fin = await postJson(`/api/assist/${assistant}/finish`, { token, text: reply.text, model: reply.model });
+      if (fin.ok) return fin.data;
+      if (fin.status !== 422) throw new Error(fin.data.error);
+    }
+    throw new Error('The free AI returned an unreadable answer.');
+  } catch (err) {
+    const msg = err?.message || err?.error?.message || (typeof err === 'string' ? err : 'The free AI is unavailable right now.');
+    throw new PuterError(msg, token);
+  }
+}
+
+function enginePlan(assistant) {
+  const choice = $('#engine').value;
+  const serverAI = Object.keys(state.health.engines ?? {}).length > 0;
+  const basicOK = (state.health.basic ?? []).includes(assistant);
+  if (choice === 'basic') {
+    if (!basicOK) throw new Error("Basic mode can't rate images or videos because it can't see them. Pick the free AI in the engine menu.");
+    return ['server', 'basic'];
+  }
+  if (choice === 'puter') return ['puter'];
+  if (choice !== 'auto') return ['server', choice];
+  if (serverAI) return ['server', 'auto'];
+  if (puterReady()) return basicOK ? ['puter', 'basic'] : ['puter'];
+  if (basicOK) return ['server', 'basic'];
+  throw new Error('The free AI could not load (network or ad blocker). Disable blockers for this site and reload.');
+}
+
 async function run(assistant, button) {
   if (state.busy) return;
   const panel = $(`#panel-${assistant}`);
   const out = $(`#result-${assistant}`);
-  const body = { ...builders[assistant](panel), profile: getProfile(), geo: $('#geo').value, engine: $('#engine').value };
+  let plan;
+  try {
+    plan = enginePlan(assistant);
+  } catch (err) {
+    out.replaceChildren(el('div', { class: 'error-box' }, err.message));
+    return;
+  }
+  const body = { ...builders[assistant](panel), profile: getProfile(), geo: $('#geo').value };
   state.busy = true;
   const label = button.textContent;
   button.disabled = true;
   button.textContent = 'Working… (can take up to a minute)';
   out.replaceChildren(el('div', { class: 'loading' }, el('span', { class: 'spinner' }), 'Analyzing your material and the latest trends…'));
   try {
-    const res = await fetch(`/api/assist/${assistant}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const data = await res.json().catch(() => ({ error: `Server error (${res.status}).` }));
-    if (!res.ok) throw new Error(data.error || `Request failed (${res.status}).`);
+    let data;
+    if (plan[0] === 'puter') {
+      if (!puterReady()) throw new Error('The free AI could not load (network or ad blocker). Choose Basic mode or reload.');
+      try {
+        // Sign-in opens a popup, so it must start right here in the click handler.
+        if (window.puter.auth && !window.puter.auth.isSignedIn()) {
+          try {
+            await window.puter.auth.signIn();
+          } catch (e) {
+            throw new PuterError(`sign-in was not completed${e?.message ? ` (${e.message})` : ''}`, null);
+          }
+        }
+        data = await runPuter(assistant, body);
+      } catch (err) {
+        // Validation errors from our own server are shown as-is; Puter problems fall back to Basic mode.
+        if (plan[1] !== 'basic' || !(err instanceof PuterError)) throw err;
+        // Free AI unavailable (cancelled sign-in, limit reached, outage): use the built-in generator.
+        const fb = err.token
+          ? await postJson(`/api/assist/${assistant}/finish`, { token: err.token, basic: true })
+          : await postJson(`/api/assist/${assistant}`, { ...body, engine: 'basic' });
+        if (!fb.ok) throw new Error(fb.data.error);
+        data = fb.data;
+        data.meta.puterError = err?.message ? String(err.message).slice(0, 160) : '';
+      }
+    } else {
+      const r = await postJson(`/api/assist/${assistant}`, { ...body, engine: plan[1] });
+      if (!r.ok) throw new Error(r.data.error || `Request failed (${r.status}).`);
+      data = r.data;
+    }
     out.replaceChildren(renderMeta(data.meta, data.result), renderers[assistant](data.result));
     out.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err) {
-    out.replaceChildren(el('div', { class: 'error-box' }, err.message || 'Network error. Is the server running?'));
+    out.replaceChildren(el('div', { class: 'error-box' }, err?.message || String(err) || 'Network error. Is the server running?'));
   } finally {
     state.busy = false;
     button.disabled = false;
@@ -352,7 +468,8 @@ const warn = (ws) => (ws?.length ? el('div', { class: 'warn' }, ws.join(' ')) : 
 
 function renderMeta(meta, result) {
   const bits = [`${meta.provider} · ${meta.model}`];
-  if (meta.fellBackFrom?.length) bits.push(`(switched automatically: ${meta.fellBackFrom.map((e) => state.health.engines[e]?.label ?? e).join(', ')} was unavailable)`);
+  const names = { puter: 'Free browser AI', basic: 'Basic mode' };
+  if (meta.fellBackFrom?.length) bits.push(`(switched automatically: ${meta.fellBackFrom.map((e) => state.health.engines?.[e]?.label ?? names[e] ?? e).join(', ')} was unavailable${meta.puterError ? `: ${meta.puterError}` : ''})`);
   if (meta.trendSources?.length) bits.push(`trends: ${meta.trendSources.join(', ')}`);
   if (meta.webSearch) bits.push('web search on');
   const download = () => {
@@ -361,7 +478,9 @@ function renderMeta(meta, result) {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
-  return el('div', { class: 'meta' }, el('span', {}, bits.join(' · ')), el('button', { class: 'copy', type: 'button', onclick: download }, 'Download JSON'));
+  return el('div', {},
+    el('div', { class: 'meta' }, el('span', {}, bits.join(' · ')), el('button', { class: 'copy', type: 'button', onclick: download }, 'Download JSON')),
+    meta.note ? el('div', { class: 'warn' }, meta.note) : '');
 }
 
 const LABELS = { hook: 'Hook', visualQuality: 'Visual quality', originality: 'Originality', emotionalImpact: 'Emotional impact', clarity: 'Clarity', trendAlignment: 'Trend alignment', shareability: 'Shareability' };
@@ -674,29 +793,36 @@ $('#transcribeBtn').addEventListener('click', async () => {
 function setupEngines() {
   const sel = $('#engine');
   const engines = state.health.engines ?? {};
+  const serverAI = Object.keys(engines).length > 0;
   sel.replaceChildren(
-    el('option', { value: 'auto' }, Object.keys(engines).length > 1 ? 'Auto (with fallback)' : 'Auto'),
+    el('option', { value: 'auto' }, serverAI ? 'Auto (with fallback)' : 'Auto: free AI, then Basic'),
     ...Object.entries(engines).map(([key, e]) => el('option', { value: key }, `${e.label} · ${e.model}`)),
+    el('option', { value: 'puter', disabled: puterReady() ? null : '' }, `Free AI in your browser (Puter)${puterReady() ? '' : ' - could not load'}`),
+    el('option', { value: 'basic' }, 'Basic mode (built-in, no AI)'),
   );
   const saved = store.get('engine', 'auto');
-  sel.value = [...sel.options].some((o) => o.value === saved) ? saved : 'auto';
-  const anySearch = Object.values(engines).some((e) => e.webSearch);
-  // Web search only exists on the paid Claude engine: hide it entirely on a free-only setup.
-  $$('.check.ws').forEach((l) => l.classList.toggle('hidden', !anySearch));
+  sel.value = [...sel.options].some((o) => o.value === saved && !o.disabled) ? saved : 'auto';
   const sync = () => {
-    const chosen = sel.value === 'auto' ? state.health.preferred : sel.value;
+    const chosen = sel.value === 'auto' ? (serverAI ? state.health.preferred : 'puter') : sel.value;
     const canSearch = Boolean(engines[chosen]?.webSearch);
     $$('.check.ws').forEach((l) => {
+      l.classList.toggle('hidden', !Object.values(engines).some((e) => e.webSearch));
       l.classList.toggle('disabled', !canSearch);
       $('input', l).disabled = !canSearch;
-      l.title = canSearch ? '' : 'Live web search needs the Claude engine.';
     });
+    $('#engineHint').textContent =
+      chosen === 'puter' ? 'Free AI: the first time, a window asks you to sign in to a free Puter account. No API key needed.'
+        : chosen === 'basic' ? 'Basic mode: instant and offline-safe, built from your text and the trend data. Cannot rate images.'
+          : '';
   };
   sel.addEventListener('change', () => { store.set('engine', sel.value); sync(); });
   sync();
   const tb = $('#transcribeBtn');
   tb.disabled = !state.health.transcription;
-  if (!state.health.transcription) tb.title = 'Needs the open-source engine (free Groq key) on the server.';
+  if (!state.health.transcription) {
+    tb.title = 'Lyrics transcription needs a free Groq key on the server. You can paste lyrics instead.';
+    $('#transcribeNote').textContent = 'Transcription is off on this server. Paste your lyrics instead.';
+  }
 }
 
 // ---------- trends ----------
@@ -732,15 +858,11 @@ async function boot() {
   buildChips();
   loadProfile();
   const status = $('#status');
-  if (state.health.configured) {
-    const labels = Object.values(state.health.engines).map((e) => e.label);
-    status.textContent = `AI ready · ${labels.join(' + ')}`;
-    status.classList.add('ok');
-  } else {
-    status.textContent = 'AI not configured';
-    status.classList.add('bad');
-    $('#setupBanner').classList.remove('hidden');
-  }
+  const labels = Object.values(state.health.engines ?? {}).map((e) => e.label);
+  if (puterReady()) labels.push('Free AI');
+  labels.push('Basic mode');
+  status.textContent = `Ready · ${labels.join(' + ')}`;
+  status.classList.add('ok');
   setupEngines();
   const geo = store.get('geo', 'US');
   if ([...$('#geo').options].some((o) => o.value === geo)) $('#geo').value = geo;

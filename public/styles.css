@@ -201,3 +201,5 @@ td:last-child { text-align: right; font-weight: 700; }
   label.check.inline { margin-top: 10px; }
 }
 .phase .pill { text-transform: none; }
+.hintbar { max-width: 1400px; margin: 0 auto; padding: 0 20px; }
+#engineHint:not(:empty) { display: block; margin-top: 12px; font-size: 13px; color: var(--muted); }

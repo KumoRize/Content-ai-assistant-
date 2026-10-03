@@ -11,14 +11,19 @@ const captionReply = {
   },
 };
 
-test('health reports unconfigured provider; assist returns 503', async () => {
+test('with no AI engine, Basic mode answers; image ratings return 503', async () => {
   const app = await startApp({ provider: null });
   try {
     const h = await app.get('/api/health');
     assert.equal(h.body.configured, false);
-    const r = await app.post('/api/assist/caption', { context: 'x' });
-    assert.equal(r.status, 503);
-    assert.match(r.body.error, /No AI provider/);
+    assert.deepEqual(h.body.basic, ['caption', 'music', 'ideas', 'thumbnail', 'artcover']);
+    const r = await app.post('/api/assist/caption', { context: 'Street food tour in Lahore, spicy challenge' });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.meta.engine, 'basic');
+    assert.ok(r.body.result.platforms.x.charCount <= 280);
+    const s = await app.post('/api/assist/score', { context: 'x' });
+    assert.equal(s.status, 503);
+    assert.match(s.body.error, /Puter/);
   } finally {
     await app.close();
   }
@@ -78,10 +83,14 @@ test('repairs one unreadable reply, then fails cleanly on a second', async () =>
   } finally {
     await app.close();
   }
-  const bad = await startApp({ provider: mockProvider(['nope', 'still nope']) });
+  const bad = await startApp({ provider: mockProvider(['nope', 'still nope', 'nope', 'nope']) });
   try {
-    const r = await bad.post('/api/assist/caption', { context: 'x' });
-    assert.equal(r.status, 502);
+    const forced = await bad.post('/api/assist/caption', { context: 'x', engine: 'claude' });
+    assert.equal(forced.status, 502);
+    const auto = await bad.post('/api/assist/caption', { context: 'x' });
+    assert.equal(auto.status, 200);
+    assert.equal(auto.body.meta.engine, 'basic', 'Auto falls back to Basic mode');
+    assert.deepEqual(auto.body.meta.fellBackFrom, ['claude']);
   } finally {
     await bad.close();
   }
@@ -91,9 +100,11 @@ test('provider errors surface with their status', async () => {
   const { AppError } = await import('../src/errors.js');
   const app = await startApp({ provider: mockProvider(new AppError(429, 'rate limited')) });
   try {
-    const r = await app.post('/api/assist/ideas', { prompt: 'gym' });
+    const r = await app.post('/api/assist/ideas', { prompt: 'gym', engine: 'claude' });
     assert.equal(r.status, 429);
     assert.equal(r.body.error, 'rate limited');
+    const score = await app.post('/api/assist/score', { context: 'x' });
+    assert.equal(score.status, 429, 'no Basic fallback for image ratings');
   } finally {
     await app.close();
   }

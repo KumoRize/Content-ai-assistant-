@@ -14,24 +14,27 @@ A web app with seven AI assistants for creators. Live at https://content-ai-stud
 
 Every assistant has a **"Your instructions"** box. Write how you want the result, and it takes priority over the defaults. A **Brand Profile** (niche, audience, tone, language, words to use or avoid) is saved in your browser and sent with every request.
 
-## Cost: $0
+## Cost: $0, no API keys needed
 
-| Piece | Free option |
-|---|---|
-| AI | Groq free tier: Llama 4 Scout (open-source, sees images) + Whisper. Free key, no credit card |
-| Hosting | Render free web service |
-| Trend data | Google Trends, Wikipedia, Reddit (no key), YouTube Data API (optional free key) |
-| Video/audio analysis | Runs in your browser |
+The app works out of the box with **no keys at all**, using three engines picked in the top-bar **AI engine** menu:
 
-Free-tier limits to know about: Groq's free models allow roughly 30 requests/minute with daily caps, and up to 5 images per request (extra video frames are sampled evenly). Render's free service sleeps after ~15 min idle, so the first visit afterwards takes 30–60 s. Claude is an optional paid extra that adds live web search; leave `ANTHROPIC_API_KEY` empty to stay free.
+| Engine | Needs | What it does |
+|---|---|---|
+| **Free AI in your browser** (default) | Nothing for you. Each user signs in once to a free [Puter](https://developer.puter.com/ai/) account (popup) | Real AI with vision, run from the browser via Puter.js's "user-pays" model, so the site owner pays nothing |
+| **Basic mode** (built-in) | Nothing | My own rule-based generator: captions/hashtags, ideas, thumbnail and cover prompts from your text, platform rules and live trend data; music ratings computed from the measured audio. Instant. It can't see images, so image ratings (Trend Score, Analytics) need the AI |
+| Groq / Claude (optional) | `OSS_API_KEY` (free) / `ANTHROPIC_API_KEY` (paid) | Server-side engines; Groq adds lyrics transcription, Claude adds live web search |
+
+**Auto** uses the free browser AI and falls back to Basic mode if sign-in is skipped, the free allowance runs out, or Puter is unreachable. The result always says which engine produced it.
+
+Hosting is Render's free plan (sleeps after ~15 min idle; the first visit afterwards takes 30–60 s). Trend data comes from free public sources.
 
 ## Quick start
 
 ```bash
 npm install
-cp .env.example .env      # then paste your free Groq key as OSS_API_KEY
+cp .env.example .env      # optional: works with no keys at all
 npm start                 # http://localhost:3000
-npm test                  # 49 tests, no network or API key needed
+npm test                  # 54 tests, no network or API key needed
 ```
 
 Requires Node 20+.
@@ -71,7 +74,7 @@ Endpoints: `POST /api/transcribe`, `POST /api/assist/{caption|score|music|analyz
 
 ## Deploy (make it live)
 
-**Render (free):** push this repo, choose *New → Blueprint*, select the repo (it reads `render.yaml`), and paste your free Groq key as `OSS_API_KEY`. Railway, Fly.io and any VPS also work: `npm ci && npm start`, with the env vars from `.env.example`.
+**Render (free):** push this repo, choose *New → Blueprint*, select the repo (it reads `render.yaml`), and deploy. No keys are required; add a free Groq key as `OSS_API_KEY` if you want server-side AI and lyrics transcription. Railway, Fly.io and any VPS also work: `npm ci && npm start`, with the env vars from `.env.example`.
 
 ## Assumptions & limits (read these)
 

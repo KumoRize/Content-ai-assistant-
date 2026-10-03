@@ -7,6 +7,8 @@ import { extractJson } from './json.js';
 import { createTrendsService, formatTrendsForPrompt } from './trends.js';
 import { COVER_STYLES, IMAGE_MODELS, PLATFORMS, RATIOS, THUMBNAIL_STYLES } from './config.js';
 import * as v from './util.js';
+import { basicAvailable, generateBasic, BASIC_NOTE } from './basic.js';
+import { randomUUID } from 'node:crypto';
 
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
@@ -30,14 +32,20 @@ const RETRYABLE = new Set([429, 500, 502, 503, 504]);
 // Errors worth retrying on the other engine: rate limits, outages, and out-of-credit/billing errors.
 const shouldFallBack = (err) => err instanceof AppError && (RETRYABLE.has(err.status) || /credit|billing|quota/i.test(err.message));
 
-export function createApp({ providers = {}, provider = null, preferred = 'claude', trends = createTrendsService(), rateLimitPerMin = 20, now = () => new Date() } = {}) {
+export function createApp({ providers = {}, provider = null, preferred = 'claude', puterModel = process.env.PUTER_MODEL || '', trends = createTrendsService(), rateLimitPerMin = 20, now = () => new Date() } = {}) {
   if (provider) providers = { ...providers, [preferred]: provider };
   const engines = Object.keys(providers);
   const order = engines.includes(preferred) ? [preferred, ...engines.filter((e) => e !== preferred)] : engines;
 
-  function pickEngines(choice) {
-    if (!engines.length) throw new AppError(503, 'No AI provider configured. Add ANTHROPIC_API_KEY and/or OSS_API_KEY in the environment settings and restart.');
-    if (choice == null || choice === '' || choice === 'auto') return order;
+  // Server-side engines to try. "basic" is the built-in generator; Auto ends with it when allowed.
+  function pickEngines(choice, assistantId) {
+    const withBasic = (list) => (basicAvailable(assistantId) ? [...list, 'basic'] : list);
+    if (choice === 'basic') return ['basic'];
+    if (choice == null || choice === '' || choice === 'auto') {
+      const list = withBasic(order);
+      if (!list.length) throw new AppError(503, 'No AI engine is available on the server for this assistant. Choose the free browser AI (Puter) in the engine menu.');
+      return list;
+    }
     if (!engines.includes(choice)) {
       throw new AppError(400, `The "${choice === 'oss' ? 'Open-source' : choice === 'claude' ? 'Claude' : choice}" engine is not configured on this server.`);
     }
@@ -48,6 +56,9 @@ export function createApp({ providers = {}, provider = null, preferred = 'claude
     let lastErr;
     for (let i = 0; i < candidates.length; i++) {
       const engine = candidates[i];
+      if (engine === 'basic') {
+        return { data: request.basic(), engine, provider: { label: 'Basic mode (built-in, no AI)' }, model: 'rules', webSearch: false, fellBackFrom: candidates.slice(0, i), note: BASIC_NOTE };
+      }
       const p = providers[engine];
       try {
         const webSearch = Boolean(request.webSearch && p.supportsWebSearch);
@@ -78,10 +89,33 @@ export function createApp({ providers = {}, provider = null, preferred = 'claude
   app.use(express.json({ limit: '40mb' }));
   app.use(express.static(publicDir));
 
+  async function prepare(assistant, body) {
+    const input = assistant.normalize(body);
+    let trendData = null;
+    let trendsText = '';
+    if (input.useLiveTrends) {
+      trendData = await trends.get(input.geo).catch(() => null);
+      trendsText = formatTrendsForPrompt(trendData);
+    }
+    return { input, trendData, ctx: { today: now().toISOString().slice(0, 10), trendsText, trendData } };
+  }
+
+  function respond(assistant, prep, data, meta) {
+    return {
+      assistant: assistant.id,
+      result: assistant.postprocess(data, prep.input),
+      meta: {
+        ...meta,
+        trendSources: prep.trendData ? prep.trendData.sources.filter((s) => s.ok && s.items.length).map((s) => s.name) : [],
+      },
+    };
+  }
+
   app.get('/api/health', (req, res) => {
     res.json({
       ok: true,
       configured: engines.length > 0,
+      basic: Object.keys(ASSISTANTS).filter(basicAvailable),
       preferred: order[0] ?? null,
       engines: Object.fromEntries(
         order.map((e) => [e, { label: providers[e].label ?? e, model: providers[e].model, webSearch: Boolean(providers[e].supportsWebSearch), vision: Boolean(providers[e].supportsVision) }]),
@@ -98,6 +132,7 @@ export function createApp({ providers = {}, provider = null, preferred = 'claude
       thumbnailStyles: THUMBNAIL_STYLES,
       coverStyles: COVER_STYLES,
       maxImages: Object.fromEntries(Object.values(ASSISTANTS).map((a) => [a.id, a.maxImages])),
+      puterModel: puterModel || null,
     });
   });
 
@@ -114,35 +149,76 @@ export function createApp({ providers = {}, provider = null, preferred = 'claude
       const assistant = ASSISTANTS[req.params.id];
       if (!assistant) throw new AppError(404, 'Unknown assistant.');
 
-      const input = assistant.normalize(req.body ?? {});
-      const candidates = pickEngines(req.body?.engine);
-      let trendData = null;
-      let trendsText = '';
-      if (input.useLiveTrends) {
-        trendData = await trends.get(input.geo).catch(() => null);
-        trendsText = formatTrendsForPrompt(trendData);
-      }
-      const today = now().toISOString().slice(0, 10);
+      const candidates = pickEngines(req.body?.engine, assistant.id);
+      const prep = await prepare(assistant, req.body ?? {});
       const out = await generateWithFallback(candidates, {
         system: assistant.system,
-        buildText: (webSearch) => assistant.buildPrompt(input, { today, trendsText, webSearch }),
-        images: input.images,
-        schema: assistant.schema(input),
-        webSearch: input.webSearch,
+        buildText: (webSearch) => assistant.buildPrompt(prep.input, { ...prep.ctx, webSearch }),
+        images: prep.input.images,
+        schema: assistant.schema(prep.input),
+        webSearch: prep.input.webSearch,
+        basic: () => generateBasic(assistant.id, prep.input, prep.ctx),
       });
+      res.json(respond(assistant, prep, out.data, {
+        engine: out.engine,
+        provider: out.provider.label ?? out.provider.name,
+        model: out.model,
+        webSearch: out.webSearch,
+        fellBackFrom: out.fellBackFrom,
+        note: out.note,
+      }));
+    } catch (err) {
+      next(err);
+    }
+  });
 
+  // Browser-side AI (Puter.js): the server builds the prompt, the browser runs it, the server
+  // validates and cleans the answer. Prepared inputs are kept briefly in memory.
+  const pending = new Map();
+  const PENDING_TTL = 15 * 60 * 1000;
+  const sweep = () => {
+    const cutoff = Date.now() - PENDING_TTL;
+    for (const [k, val] of pending) if (val.at < cutoff) pending.delete(k);
+  };
+
+  app.post('/api/assist/:id/prepare', rateLimiter(rateLimitPerMin), async (req, res, next) => {
+    try {
+      const assistant = ASSISTANTS[req.params.id];
+      if (!assistant) throw new AppError(404, 'Unknown assistant.');
+      const prep = await prepare(assistant, req.body ?? {});
+      sweep();
+      if (pending.size > 2000) pending.clear();
+      const token = randomUUID();
+      pending.set(token, { at: Date.now(), assistantId: assistant.id, prep });
+      const schema = assistant.schema(prep.input);
       res.json({
-        assistant: assistant.id,
-        result: assistant.postprocess(out.data, input),
-        meta: {
-          engine: out.engine,
-          provider: out.provider.label ?? out.provider.name,
-          model: out.model,
-          webSearch: out.webSearch,
-          fellBackFrom: out.fellBackFrom,
-          trendSources: trendData ? trendData.sources.filter((s) => s.ok && s.items.length).map((s) => s.name) : [],
-        },
+        token,
+        system: assistant.system,
+        prompt: `${assistant.buildPrompt(prep.input, { ...prep.ctx, webSearch: false })}\n\nReturn ONLY a JSON object matching this JSON Schema (no markdown, no commentary):\n${JSON.stringify(schema)}`,
+        basicAvailable: basicAvailable(assistant.id),
       });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post('/api/assist/:id/finish', async (req, res, next) => {
+    try {
+      const assistant = ASSISTANTS[req.params.id];
+      const entry = pending.get(req.body?.token);
+      if (!assistant || !entry || entry.assistantId !== assistant.id) throw new AppError(410, 'This request expired. Please generate again.');
+      const { prep } = entry;
+      if (req.body.basic === true) {
+        // Browser AI was unavailable: answer with the built-in generator instead.
+        pending.delete(req.body.token);
+        const data = generateBasic(assistant.id, prep.input, prep.ctx);
+        return res.json(respond(assistant, prep, data, { engine: 'basic', provider: 'Basic mode (built-in, no AI)', model: 'rules', webSearch: false, fellBackFrom: ['puter'], note: BASIC_NOTE }));
+      }
+      const data = extractJson(typeof req.body.text === 'string' ? req.body.text : '');
+      if (!data) throw new AppError(422, 'The AI returned an unreadable answer.');
+      pending.delete(req.body.token);
+      const model = typeof req.body.model === 'string' ? req.body.model.slice(0, 80) : 'puter';
+      res.json(respond(assistant, prep, data, { engine: 'puter', provider: 'Free browser AI (Puter)', model, webSearch: false, fellBackFrom: [] }));
     } catch (err) {
       next(err);
     }

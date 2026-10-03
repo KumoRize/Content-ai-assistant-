@@ -6,6 +6,8 @@
   <title>Content AI Studio</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%E2%9C%A6%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="styles.css" />
+  <!-- Free AI with no API key: each user signs in to their own free Puter account -->
+  <script src="https://js.puter.com/v2/"></script>
 </head>
 <body>
   <header class="topbar">
@@ -18,10 +20,7 @@
     </div>
   </header>
 
-  <div id="setupBanner" class="banner hidden">
-    The free AI isn't switched on yet. Create a free key at <b>console.groq.com/keys</b> (no credit card), then add it as
-    <code>OSS_API_KEY</code> in your server's environment settings (or <code>.env</code> when running locally) and restart.
-  </div>
+  <div id="engineHintBar" class="hintbar"><span id="engineHint"></span></div>
 
   <div class="layout">
     <nav class="tabs" id="tabs">
